@@ -312,9 +312,9 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
   <!-- SCHEDULE -->
   <section data-panel="schedule">
     <div class="card">
-      <h2 id="tlTitle">Coverage</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between"><h2 id="tlTitle" style="margin:0">Coverage</h2><select id="wkSel" aria-label="Week"></select></div>
       <p class="sub">Each bar is a shift, Singapore time, 7am to 11pm. The red line is the time now. The bottom rows count CS agents, Ops agents and all agents on shift each half hour.</p>
-      <div class="rangebar" style="margin:6px 0 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><select id="wkSel" aria-label="Week"></select><div class="seg" role="group" aria-label="Day" id="wkDays"></div></div>
+      <div class="rangebar" style="margin:6px 0 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><div class="seg" role="group" aria-label="Day" id="wkDays"></div></div>
       <div class="tablewrap"><div id="timeline"></div></div>
     </div>
     <div class="card">
