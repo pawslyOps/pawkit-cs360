@@ -248,6 +248,27 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
 #waPop .bx{background:#fff;border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:9px 12px;font-size:14px;line-height:1.45;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
 #waPop .bt{font-size:11.5px;color:var(--ink3);margin:3px 0 0 4px}
 #waPop .pf{padding:9px 14px;font-size:12px;color:var(--ink3);border-top:1px solid var(--line)}
+
+/* Provider Status manual: the journey of one visit */
+.pm-lead{color:var(--ink2,var(--ink3));font-size:15px;max-width:70ch;margin:0 0 14px}
+.pm-map{display:flex;flex-direction:column}
+.pm-stop{display:grid;grid-template-columns:104px 1fr;gap:0 16px}
+.pm-when{padding-top:12px;text-align:right;font-weight:700;font-size:14px;color:var(--brand)}
+.pm-when small{display:block;font-weight:400;color:var(--ink3);font-size:12.5px}
+.pm-body{position:relative;border-left:3px solid var(--line);padding:0 0 22px 20px;min-width:0}
+.pm-stop:last-child .pm-body{padding-bottom:0}
+.pm-body::before{content:"";position:absolute;left:-10px;top:13px;width:17px;height:17px;border-radius:50%;background:var(--brand);border:3px solid var(--surface);box-sizing:border-box}
+.pm-msg{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:9px;background:var(--bg)}
+.pm-msg h3{margin:0;font-size:15.5px;color:var(--head)}
+.pm-msg .q{margin:0;color:var(--ink3);font-size:13.5px}
+.pm-row{display:grid;grid-template-columns:minmax(128px,auto) 18px 1fr;gap:8px;align-items:center}
+.pm-btn{display:inline-block;border:1.5px solid var(--brand);color:var(--brand);border-radius:999px;padding:2px 12px;font-weight:700;font-size:13.5px;text-align:center;white-space:nowrap;background:var(--surface)}
+.pm-arrow{color:var(--ink3);text-align:center}
+.pm-out{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;min-width:0}
+.pm-then{color:var(--ink3)}
+.pm-net{margin:0;background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:7px 12px;font-size:13.5px}
+.pm-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+@media (max-width:560px){ .pm-stop{grid-template-columns:1fr} .pm-when{text-align:left;padding:0 0 6px 23px} .pm-row{grid-template-columns:1fr;gap:4px} .pm-arrow{display:none} .pm-btn{justify-self:start} }
 </style>
 </head>
 <body>
@@ -294,7 +315,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     <button role="tab" data-tab="workforce">Workforce</button>
     <button role="tab" data-tab="service">Customer Service</button>
     <button role="tab" data-tab="bookings">Bookings</button>
-    <button role="tab" data-tab="provider">Provider Status</button>
+    <button role="tab" data-tab="providers">Provider Status</button>
     <button role="tab" data-tab="orders">Orders</button>
     <button role="tab" data-tab="xero">Xero</button>
   </nav>
@@ -467,6 +488,50 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <h2>All visits</h2>
       <p class="sub filternote" id="psNote"></p>
       <div class="tablewrap"><table id="psAll"></table></div>
+    </div>
+  </section>
+
+  <!-- PROVIDER STATUS MANUAL -->
+  <section data-panel="manual">
+    <div class="card">
+      <h2>Provider Status: how it works</h2>
+      <p class="pm-lead">Live since 21 November 2026. Providers get WhatsApp messages with buttons. One tap tells us where a visit stands, updates the booking in Zoho, and shows on the Live Status tab. No typing, no chasing.</p>
+      <h2 style="margin-top:6px">The journey of one visit</h2>
+      <p class="sub">Each stop is a message the provider receives. The buttons are on the left; what Zoho records is on the right.</p>
+      <div class="pm-map">
+      <div class="pm-stop"><div class="pm-when">Day before<small>6:00pm</small></div><div class="pm-body"><div class="pm-msg"><h3>Booking reminder</h3><p class="q">Date and time, service, pet, owner, address and notes.</p><div class="pm-row"><span class="pm-btn">Confirm</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Confirmed</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No tap by 8:00am on the visit day?</b> Zoho raises a CS task to call the provider.</p></div></div></div>
+      <div class="pm-stop"><div class="pm-when">2 hours before<small>the visit</small></div><div class="pm-body"><div class="pm-msg"><h3>Time to leave</h3><p class="q">Pet, owner, time, address and a Google Maps link.</p><div class="pm-row"><span class="pm-btn">On my way</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill brand">On the way</span><span class="pm-then">then "tap when you arrive"</span></span></div><div class="pm-row"><span class="pm-btn">Running late</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Delayed</span><span class="pm-then">then "how late?" 15, 30, 45 or 60 min, which sets the new arrival time</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No update 45 minutes before?</b> Zoho raises a CS task to call the provider.</p></div></div></div>
+      <div class="pm-stop"><div class="pm-when">At the door<small>visit time</small></div><div class="pm-body"><div class="pm-msg"><h3>Arrive and start</h3><p class="q">Two short messages, one after the other.</p><div class="pm-row"><span class="pm-btn">Arrived</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Arrived</span><span class="pm-then">then "tap when you start"</span></span></div><div class="pm-row"><span class="pm-btn">Service started</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">In progress</span></span></div><p class="pm-net"><b>30 minutes late and not arrived?</b> Zoho raises a CS task. The Escalation SOP applies.</p></div></div></div>
+      <div class="pm-stop"><div class="pm-when">After the visit<small>5 min past end time</small></div><div class="pm-body"><div class="pm-msg"><h3>How did the visit go?</h3><div class="pm-row"><span class="pm-btn">Completed</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Completed</span><span class="pm-then">CS closes the booking in Zoho</span></span></div><div class="pm-row"><span class="pm-btn">Cancelled</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Cancelled</span><span class="pm-then">CS task: call the customer</span></span></div><div class="pm-row"><span class="pm-btn">Needs reschedule</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Needs reschedule</span><span class="pm-then">CS task: offer new slots</span></span></div></div></div></div>
+      </div>
+    </div>
+    <div class="two">
+      <div class="card">
+        <h2>CS team</h2>
+        <ul class="pm-list">
+          <li>Watch <b>Live Status</b>. Each visit shows its step, and "Needs the CS team" lists what to act on.</li>
+          <li>Work the Provider Status tasks in the <b>Task Tracker</b> like any other task.</li>
+          <li>When you call a provider yourself, set <b>Visit Status</b> on the booking with the Update button.</li>
+          <li>Still close each booking in Zoho (Completed, Cancelled or To be Rescheduled). A tap does not close it.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Providers</h2>
+        <ul class="pm-list">
+          <li>Messages come from the Pawkit WhatsApp line, the same one as today.</li>
+          <li>Tap one button per message. Nothing to type.</li>
+          <li>If anything changes, reply in the same chat and CS will pick it up.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Good to know in week one</h2>
+      <ul class="pm-list">
+        <li><b>Providers get two sets of reminders for now.</b> The older reminders without buttons are still on until we switch them off.</li>
+        <li><b>Customers are not messaged automatically yet.</b> Keep updating customers the way you do today.</li>
+        <li><b>"Nearby" is not live.</b> It needs the provider's location and comes in a later phase.</li>
+        <li><b>A tap only counts from the provider on the booking.</b> If the number on the booking is wrong, the status will not update. Fix the number in Zoho.</li>
+      </ul>
     </div>
   </section>
 
@@ -832,8 +897,8 @@ function init(data){
   const TABS=[...document.querySelectorAll('#tabs button')];
   // Two main tabs are groups with sub-tabs. The old links (#schedule, #leave, #whatsapp, #tasks, #complaints)
   // open the matching sub-tab, and each group remembers the sub-tab last opened.
-  const GROUPS={workforce:[['schedule','Schedule'],['leave','Time Off']], service:[['whatsapp','WhatsApp Inquiries'],['tasks','Agent Tasks'],['complaints','Customer Complaints']]};
-  const SUB={workforce:'schedule',service:'whatsapp'};
+  const GROUPS={workforce:[['schedule','Schedule'],['leave','Time Off']], service:[['whatsapp','WhatsApp Inquiries'],['tasks','Agent Tasks'],['complaints','Customer Complaints']], providers:[['provider','Live Status'],['manual','Manual']]};
+  const SUB={workforce:'schedule',service:'whatsapp',providers:'provider'};
   const groupOf=p=>Object.keys(GROUPS).find(g=>GROUPS[g].some(x=>x[0]===p));
   const ALONE={request:'leave'};   // a page of its own that belongs under a sub-tab
   const showTab=t=>{ const alone=ALONE[t]?t:null; if(alone) t=ALONE[t]; const g0=groupOf(t); if(g0){ SUB[g0]=t; t=g0; } else if(!GROUPS[t]&&!TABS.some(b=>b.dataset.tab===t)) t='overview';
