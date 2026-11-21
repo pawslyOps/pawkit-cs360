@@ -369,6 +369,18 @@ def customer_history(z, today):
     return c
 
 
+REFUND_FIELDS = ("Name, Refund_Status, Refund_Reason, Refund_Amount, Payment_Method, Requested_Date, Approved_Date, Owner, Approved_By, "
+                 "Handled_By, Xero_Credit_Note_No, Booking.Name, Booking.Service_Category, Created_Time")
+
+
+def slim_refund(r, nm):
+    """One Refund record as published. No description, notes, customer name or number."""
+    return {"id": r.get("id"), "n": r.get("Name"), "s": r.get("Refund_Status") or "No status", "why": r.get("Refund_Reason"),
+            "amt": r.get("Refund_Amount"), "ch": r.get("Payment_Method"), "rq": r.get("Requested_Date") or (r.get("Created_Time") or "")[:10] or None,
+            "done": r.get("Approved_Date"), "by": nm(r.get("Owner")), "pby": nm(r.get("Approved_By")), "rec": r.get("Handled_By"),
+            "cn": r.get("Xero_Credit_Note_No"), "bk": r.get("Booking.Name"), "cat": r.get("Booking.Service_Category")}
+
+
 # ---- schedule: read the week tabs of the Schedule Tracker sheet, so the sheet is the one place to edit shifts ----
 SHEET_CACHE = os.path.join(HERE, "raw", "sheet_roster.json")
 _MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
@@ -616,6 +628,14 @@ def main():
               "up": i.get("Unit_Price"), "cp": i.get("Cost_Price"), "sync": i.get("Last_Synced")}
              for i in z.all("select Name, Item_Code, Qty_On_Hand, Reserved_Qty, Unit_Price, Cost_Price, Last_Synced from Xero_Items where id is not null")]
 
+    # refunds (custom module Refund). The refund description, internal notes and the customer's name and number
+    # stay in Zoho: only status, amounts, dates, reason, channel, who handled it and the Xero credit note are published.
+    try:
+        refunds = [slim_refund(r, nm) for r in z.all("select %s from Refund where id is not null" % REFUND_FIELDS)]
+    except SystemExit as e:
+        print("WARNING refunds could not be read:", str(e)[:120])
+        refunds = None
+
     # time off requests (custom module Leave_Requests, shown in Zoho as "Time Off Requests"; the reason stays in Zoho, it is not published)
     try:
         lv = z.all("select Team_Member, Leave_Type, From_Date, To_Date, Cover_Arranged, Leave_Status, Decision_Note, Created_Time, Modified_By, Modified_Time from Leave_Requests where id is not null")
@@ -686,7 +706,7 @@ def main():
         bal = None
 
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "refunds": refunds}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)

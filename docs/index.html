@@ -383,6 +383,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     <button role="tab" data-tab="providers">Provider Status</button>
     <button role="tab" data-tab="orders">Orders</button>
     <button role="tab" data-tab="xero">Xero</button>
+    <button role="tab" data-tab="refunds">Refunds</button>
   </nav>
   <nav class="tabs" role="tablist" id="wfTabs" aria-label="Sections" style="display:none;margin-top:-6px"></nav>
   <div class="rangebar" id="csBar" style="display:none"><div class="seg" role="group" aria-label="Range" id="csRange"><button data-r="day">Day</button><button data-r="week">Week</button><button data-r="month">Month</button><button data-r="all">All</button></div>
@@ -658,6 +659,32 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     </div>
   </section>
 
+  <!-- REFUNDS -->
+  <section data-panel="refunds">
+    <div class="tiles" id="rfTiles"></div>
+    <div class="two">
+      <div class="card">
+        <h2>By reason</h2>
+        <p class="sub">Refunds in the Refund module of Zoho CRM, by the refund reason. Amounts are the refund amount.</p>
+        <div class="tablewrap"><table id="rfWhy"></table></div>
+      </div>
+      <div class="card">
+        <h2>By refund channel</h2>
+        <p class="sub">Same refunds, by how the money went back.</p>
+        <div class="tablewrap"><table id="rfCh"></table></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 id="rfListTitle">Refunds</h2>
+      <p class="sub" id="rfSub">Newest request first. The refund description, notes and customer details stay in Zoho.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input id="rfSearch" type="search" placeholder="Search refund, booking, reason or service" aria-label="Search refunds" style="flex:1;min-width:180px">
+        <select id="rfFilter" aria-label="Filter refunds"><option value="all">All refunds</option><option value="open">Not completed</option><option value="Completed">Completed</option><option value="nocn">Completed, no Xero credit note</option></select>
+      </div>
+      <div class="tablewrap" style="max-height:560px;overflow:auto"><table id="rfList"></table></div>
+    </div>
+  </section>
+
   <!-- LEAVE -->
   <section data-panel="leave" id="timeoff">
     <div class="tiles" id="lvTiles"></div>
@@ -869,8 +896,8 @@ let DECIDE=null;
 const recLink=(kind,id,text)=>{ const b=((CFG&&CFG.links||{}).record||{})[kind]; return b&&id?`<a href="${esc(b+encodeURIComponent(id))}" target="_blank" rel="noopener" title="Open in Zoho">${esc(text)}</a>`:esc(text); };
 let WN_F='waiting', WN_SEG='cust', WN_ROWS=[];
 // ---- date filter for the Customer Service pages (each page remembers its own range) ----
-const CSF={whatsapp:{r:'day',d:null},tasks:{r:'all',d:null},complaints:{r:'all',d:null},orders:{r:'month',d:null},xero:{r:'all',d:null}};
-const CS_BY={whatsapp:'by message date',tasks:'tasks by due date',complaints:'by complaint date',orders:'by order date',xero:'invoices by visit date (stock is not dated)'};
+const CSF={whatsapp:{r:'day',d:null},tasks:{r:'all',d:null},complaints:{r:'all',d:null},orders:{r:'month',d:null},xero:{r:'all',d:null},refunds:{r:'all',d:null}};
+const CS_BY={whatsapp:'by message date',tasks:'tasks by due date',complaints:'by complaint date',orders:'by order date',xero:'invoices by visit date (stock is not dated)',refunds:'by requested date'};
 let CUR_PANEL='overview';
 function rangeOf(r,day){ const d=dparts(day);
   if(r==='week'){ const dow=(d.getUTCDay()+6)%7, from=addDays(day,-dow); return {from,to:addDays(from,6),label:'Week of '+fmtDay(from)}; }
@@ -997,6 +1024,7 @@ function init(data){
       if(a==='tasks'){ TK_VIEW=b; }
       render(day); go(a); return; }
     if(g==='xs'){ $('xFilter').value=a; renderStock(); $('xStock').closest('.card').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    if(g==='rf'){ ACT_ON.rf=ACT_ON.rf===act&&a!=='all'?null:act; render(day); $('rfList').closest('.card').scrollIntoView({behavior:'smooth',block:'start'}); return; }
     ACT_ON[g]=ACT_ON[g]===act?null:act; render(day);
     const tgt={wa:'waTable',op:'opTable',ps:'psAll',xi:'xList',lv:'lvAll'}[g]; if(g==='lv') $('lvCard').open=true;   // a Time Off tile opens the folded list
     if(tgt&&ACT_ON[g]) $(tgt).closest('.card').scrollIntoView({behavior:'smooth',block:'start'}); };
@@ -1004,6 +1032,7 @@ function init(data){
     const t=e.target.closest('.tile[data-act]'); if(t) tileAct(t.dataset.act); });
   $('app').addEventListener('keydown',e=>{ const t=e.target.closest&&e.target.closest('.tile[data-act]'); if(t&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); tileAct(t.dataset.act); } });
   $('xSearch').addEventListener('input',renderStock); $('cpSearch').addEventListener('input',renderComplaints);
+  $('rfSearch').addEventListener('input',renderRefundList); $('rfFilter').addEventListener('change',e=>{ ACT_ON.rf=e.target.value==='all'?null:'rf:'+e.target.value; render($('day').value); });
   const lvSick=()=>{ const s=$('lvType').value==='Sick leave'; $('lvDocWrap').style.display=s?'flex':'none'; $('lvDoc').disabled=!s; $('lvDoc').required=s; if(!s) $('lvDoc').value=''; };
   $('lvType').addEventListener('change',lvSick); lvSick();
   $('lvForm').addEventListener('submit',e=>{ const f=$('lvFrom').value, t=$('lvTo').value||f, w=$('lvWho').value, err=$('lvErr'); err.textContent='';
@@ -1438,10 +1467,46 @@ function render(day){
   $('xPay').innerHTML='<tr><th>Payment method</th><th class="num">Visits</th><th class="num">Marked paid</th></tr>'+Object.keys(payC).sort((a,b)=>payC[b]-payC[a]).map(k=>`<tr><td>${esc(k)}</td><td class="num">${payC[k]}</td><td class="num">${payPaid[k]||0}</td></tr>`).join('');
   $('xStockSub').textContent='Xero Items in Zoho CRM, last synced '+(sync?fmtDay(dayOf(sync))+' '+t12(timeOf(sync)):'(unknown)')+'. Items at zero include services that carry no stock.';
   renderStock();
-  $('foot').textContent='Sources: Zoho CRM (Booking, Woztell logs, Complaints, Tasks, Order Processing, Xero Items, Time Off Requests) and the Pawkit CS Team Schedule Tracker. Times are Singapore time. Snapshot taken '+D.generated.replace('T',' ').slice(0,16)+' SGT.';
+
+  // ---- refunds (Refund module) ----
+  const rfR=csR('refunds'), RF=(D.refunds||[]).filter(r=>rfR.all||rfR.has(r.rq));
+  const rfOpen=RF.filter(r=>r.s!=='Completed'), rfDone=RF.filter(r=>r.s==='Completed'), rfNoCn=RF.filter(rfNeedsCn);
+  const rfSum=L=>rfMoney(L.reduce((a,r)=>a+(r.amt||0),0));
+  const rfDays=rfDone.filter(r=>r.rq&&r.done&&r.done>=r.rq).map(r=>Math.round((dparts(r.done)-dparts(r.rq))/864e5)).sort((a,b)=>a-b);
+  const rfMed=rfDays.length?rfDays[Math.floor(rfDays.length/2)]:null;   // upper middle on even counts, as the WhatsApp reply median
+  $('rfTiles').innerHTML=D.refunds==null?'<div class="flag warn" style="grid-column:1/-1">Refunds have not been published yet. They appear after the next update from Zoho.</div>':
+    tile('Refunds',RF.length,rfSum(RF)+(rfR.all?' in total':' · '+rfR.label),'rf:all')+
+    tile('Not completed',rfOpen.length,rfOpen.length?rfSum(rfOpen)+' still to refund':'none waiting','rf:open')+
+    tile('Completed',rfDone.length,rfSum(rfDone)+' refunded','rf:Completed')+
+    tile('No Xero credit note',rfNoCn.length,'completed, '+rfSum(rfNoCn)+' to reconcile (Pawkit Credit needs none)','rf:nocn')+
+    tile('Typical time to refund',rfMed==null?'–':rfMed+(rfMed===1?' day':' days'),'median, requested to processed');
+  const rfTbl=(id,key,label)=>{ const C={},A={}; RF.forEach(r=>{const k=r[key]||'Not set'; C[k]=(C[k]||0)+1; A[k]=(A[k]||0)+(r.amt||0);});
+    $(id).innerHTML=`<tr><th>${label}</th><th class="num">Refunds</th><th class="num">Amount</th></tr>`+(Object.keys(C).length?Object.keys(C).sort((a,b)=>A[b]-A[a]||C[b]-C[a]).map(k=>`<tr><td>${esc(k)}</td><td class="num">${C[k]}</td><td class="num">${rfMoney(A[k])}</td></tr>`).join('')+
+      `<tr><th>Total</th><th class="num">${RF.length}</th><th class="num">${rfSum(RF)}</th></tr>`:'<tr><td colspan="3" class="muted">No refunds in this range.</td></tr>'); };
+  rfTbl('rfWhy','why','Reason'); rfTbl('rfCh','ch','Refund channel');
+  $('rfFilter').value=(ACT_ON.rf||'rf:all').split(':')[1];
+  RF_ROWS=RF; renderRefundList();
+  $('foot').textContent='Sources: Zoho CRM (Booking, Woztell logs, Complaints, Tasks, Order Processing, Xero Items, Refund, Time Off Requests) and the Pawkit CS Team Schedule Tracker. Times are Singapore time. Snapshot taken '+D.generated.replace('T',' ').slice(0,16)+' SGT.';
 }
 
 
+let RF_ROWS=[];
+// whole dollars without cents, anything else with two decimals ($75, $11.80)
+// a completed refund still waiting for its Xero credit note (Pawkit Credit stays inside Pawkit, so it needs none)
+const rfNeedsCn=r=>r.s==='Completed'&&!r.cn&&r.ch!=='Pawkit Credit';
+const rfMoney=v=>v==null?'':'$'+Number(v).toLocaleString('en-SG',{minimumFractionDigits:Number.isInteger(Math.round(v*100)/100)?0:2,maximumFractionDigits:2});
+function renderRefundList(){
+  const q=($('rfSearch').value||'').toLowerCase(), f=$('rfFilter').value, money=rfMoney;
+  const pill=s=>`<span class="pill ${s==='Completed'?'on':s==='Pending'||s==='No status'?'warn':s==='Processing'||s==='Approved'?'brand':''}">${esc(s)}</span>`;
+  const linked=!!(((CFG&&CFG.links||{}).record||{}).refund);   // refund links need links.record.refund in the private config
+  $('rfSub').textContent='Newest request first.'+(linked?' Click a refund number to open it in Zoho.':'')+' The refund description, notes and customer details stay in Zoho.';
+  const L=RF_ROWS.filter(r=>(f==='open'?r.s!=='Completed':f==='Completed'?r.s==='Completed':f==='nocn'?rfNeedsCn(r):true)&&
+    (!q||[r.n,r.bk,r.why,r.cat,r.ch,r.s,r.by,r.cn,r.rec].join(' ').toLowerCase().includes(q))).sort((a,b)=>(b.rq||'').localeCompare(a.rq||'')||(b.n||'').localeCompare(a.n||''));
+  $('rfListTitle').textContent=({open:'Refunds not completed',Completed:'Completed refunds',nocn:'Completed refunds with no Xero credit note'}[f]||'Refunds')+' ('+L.length+')';
+  $('rfList').innerHTML='<tr><th>Refund</th><th>Requested</th><th>Booking</th><th>Service</th><th>Reason</th><th>Channel</th><th>Status</th><th class="num">Amount</th><th>Raised by</th><th>Processed</th><th>Credit note</th><th>Reconciled by</th></tr>'+(L.length?L.map(r=>
+    `<tr><td style="white-space:nowrap">${recLink('refund',r.id,r.n||'Refund')}</td><td style="white-space:nowrap">${r.rq?esc(fmtDay(r.rq)):''}</td><td class="muted">${esc(r.bk||'')}</td><td>${esc(r.cat||'')}</td><td>${esc(r.why||'Not set')}</td><td class="muted">${esc(r.ch||'')}</td><td>${pill(r.s)}</td><td class="num">${money(r.amt)}</td><td>${esc(r.by||'')}</td><td class="muted" style="white-space:nowrap">${r.done?esc(fmtDay(r.done))+(r.pby?' · '+esc(r.pby):''):''}</td><td>${r.cn?esc(r.cn):rfNeedsCn(r)?'<span class="pill warn">none</span>':r.s==='Completed'?'<span class="muted">not needed</span>':''}</td><td>${esc(r.rec||'')}</td></tr>`).join('')+
+    `<tr><th colspan="7">Total</th><th class="num">${money(L.reduce((a,r)=>a+(r.amt||0),0))}</th><th colspan="4"></th></tr>`:'<tr><td colspan="12" class="muted">No refunds match.</td></tr>');
+}
 function renderStock(){
   const items=D.items||[]; const q=($('xSearch').value||'').toLowerCase(), f=$('xFilter').value;
   const keep=i=>{const n=i.q||0; if(f==='low'&&!(n>0&&n<=5))return false; if(f==='in'&&!(n>0))return false; if(f==='out'&&n>0)return false; return !q||(i.n||'').toLowerCase().includes(q)||(i.code||'').toLowerCase().includes(q);};

@@ -29,3 +29,10 @@ Anything already published under an old passcode stays readable with that passco
 - The page is titled Pawkit Ops360 (the address stays cs360.pawkit.sg). Schedule and Time Off are sub-tabs of one Workforce tab; `#schedule` and `#leave` still open them.
 - WhatsApp "Reply status right now": `refresh.py` reads the last 48 hours of WOZTELL logs, groups them by customer and publishes counts plus the waiting list (name, number, since when). No message text is published. Names missing from the log are looked up in the Customers module by mobile number.
 - Overview is four compact cards (Workforce, Customer Service, Services and Bookings, Orders and Inventory). Each number opens its tab. Quick links to Zoho and other tools come from `links` in the private config (so the addresses are only in the encrypted data); complaint numbers and task names link to their Zoho records.
+
+## Refunds
+
+- The Refunds tab reads the Zoho CRM module `Refund`: status, amount, reason, refund channel, requested and processed dates, booking, service, who raised and processed it, who reconciled it, and the Xero credit note number. The refund description, internal notes and the customer's name and number are never published. If Zoho refuses the read, the tab says refunds are not published yet and the rest of the update carries on.
+- The Mac's Zoho token needs read access to the `Refund` module.
+- "No Xero credit note" counts completed refunds without a credit note number, except refunds paid as Pawkit Credit (the money stays inside Pawkit, so no credit note is expected).
+- Refund numbers link to Zoho only after a `refund` entry is added under `links.record` in the private `~/.config/pawkit-cs360/config.json`, the same way as the existing record links: the Zoho address of a Refund record without its id at the end, e.g. `"refund": "https://crm.zoho.com/crm/<org>/tab/<Refund module>/"`. Until then the numbers show as plain text and the page does not offer the link.
