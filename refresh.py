@@ -78,6 +78,8 @@ class Zoho:
 
     def req(self, path, body=None):
         Zoho.calls["n"] += 1
+        if os.environ.get("ZTRACE") and "coql" not in path:
+            print("TRACE req  %s" % path[:60])
         h = {"Authorization": "Zoho-oauthtoken " + self.token()}
         data = None
         if body is not None:
@@ -102,6 +104,9 @@ class Zoho:
     def coql(self, q):
         j = self.req("/crm/v5/coql", {"select_query": q})
         Zoho.calls["rows"] += len(j.get("data", []) or [])
+        if os.environ.get("ZTRACE"):   # debugging: one line per COQL call
+            m = re.search(r" from (\S+)", q)
+            print("TRACE coql %-40s %5d rows" % ((m.group(1) if m else "?")[-40:], len(j.get("data", []) or [])))
         return j
 
     def all(self, q):
@@ -311,12 +316,12 @@ def whatsapp_status(z, now, rows=None):
 
 def customer_history(z, today):
     """Per-customer history from every booking: first completed visit (for 'repeat'), and who is due
-    for grooming or a vaccination. Heavy (all bookings), so it is cached and rebuilt once an hour."""
+    for grooming or a vaccination. Heavy (all bookings), so it is cached and rebuilt every 6 hours (and on a new day)."""
     path = os.path.join(HERE, "raw", "hist_cache.json")
     try:
         with open(path) as f:
             c = json.load(f)
-        if time.time() - c.get("_t", 0) < 3600 and c.get("day") == today.isoformat():
+        if time.time() - c.get("_t", 0) < 6 * 3600 and c.get("day") == today.isoformat():
             return c
     except (OSError, ValueError):
         c = None
@@ -507,6 +512,34 @@ def fast():
           "waiting chats,", Zoho.calls["n"], "zoho calls,", Zoho.calls["rows"], "coql rows")
 
 
+SLOW = os.path.join(HERE, "raw", "slow_cache.json")
+
+
+def slow(name, ttl, fn):
+    """Data that rarely changes (staff list, Xero stock, leave credits, app orders): read from Zoho at most once per
+    ttl seconds; if a read fails, the last good copy is used."""
+    try:
+        with open(SLOW) as f:
+            c = json.load(f)
+    except (OSError, ValueError):
+        c = {}
+    e = c.get(name)
+    if e and time.time() - e.get("t", 0) < ttl:
+        return e["v"]
+    try:
+        v = fn()
+    except SystemExit:
+        if e:
+            return e["v"]
+        raise
+    c[name] = {"t": time.time(), "v": v}
+    tmp = SLOW + ".%d.tmp" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(c, f)
+    os.replace(tmp, SLOW)
+    return v
+
+
 def rng(d):
     return "between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (d, d)
 
@@ -521,7 +554,7 @@ def main():
     next_sun = today + timedelta(days=13 - today.weekday())  # Sunday of next week (>= today+7)
     end_vis = max(eom, next_sun).isoformat()
 
-    users = {u["id"]: u["full_name"] for u in z.req("/crm/v5/users?type=AllUsers&per_page=200").get("users", [])}
+    users = slow("users", 3600, lambda: {u["id"]: u["full_name"] for u in z.req("/crm/v5/users?type=AllUsers&per_page=200").get("users", [])})
     nm = lambda v: users.get(v["id"]) if isinstance(v, dict) and v.get("id") else None
 
     # WhatsApp per day (cached)
@@ -533,11 +566,33 @@ def main():
             cache = {}
     except (OSError, ValueError):
         cache = {}  # missing or damaged cache: just re-count all days
+    # the 48 h of message rows: re-read in full once an hour (catches late logs), otherwise only what is new
+    try:
+        last_full = os.path.getmtime(os.path.join(HERE, "raw", "wa_full.stamp"))
+    except OSError:
+        last_full = 0
+    full_wa = time.time() - last_full > 3600
+    try:
+        wrows = wa_rows(z, now, full=full_wa)
+        if full_wa:
+            open(os.path.join(HERE, "raw", "wa_full.stamp"), "w").close()
+    except SystemExit as e:
+        print("WARNING WhatsApp messages could not be read:", str(e)[:120])
+        wrows = None
+    yday = (today - timedelta(days=1)).isoformat()
     wa = {}
     for d in days:
         c = cache.get(d)
-        fresh = d >= (today - timedelta(days=1)).isoformat()
-        if c and not fresh and time.time() - c.get("_t", 0) < 3600:
+        if d >= yday and wrows is not None:   # (3) today and yesterday: count the saved rows, no Zoho call
+            ins = [r for r in wrows if (r.get(W + "Message_Date_time") or "")[:10] == d]
+            wa[d] = {"in": sum(1 for r in ins if r.get(W + "Direction") == "In"),
+                     "out": sum(1 for r in ins if r.get(W + "Direction") == "Out"),
+                     "chats": len({r.get(W + "From") for r in ins if r.get(W + "Direction") == "In"})}
+            cache[d] = dict(wa[d], _t=time.time())
+            continue
+        # (1) a finished day never changes: keep a count taken at least 2 hours after that day ended
+        ended = datetime.fromisoformat(d + "T00:00:00+08:00").timestamp() + 86400 + 7200
+        if c and c.get("_t", 0) > ended:
             wa[d] = {k: c[k] for k in ("in", "out", "chats")}; continue
         a = z.coql("select %sDirection, COUNT(id) from %sWoztell_logs where %sMessage_Date_time %s group by %sDirection" % (W, W, W, rng(d), W))
         o = {x[W + "Direction"]: x["COUNT(id)"] for x in a.get("data", [])}
@@ -551,7 +606,7 @@ def main():
     os.replace(ctmp, cpath)
 
     try:
-        wa_now = whatsapp_status(z, now)
+        wa_now = whatsapp_status(z, now, wrows) if wrows is not None else None
     except SystemExit as e:
         print("WARNING WhatsApp reply status could not be read:", str(e)[:120])
         wa_now = None
@@ -577,7 +632,9 @@ def main():
                       **({"app": True} if r.get("Booking_Code") else {})}   # booked through the Pawkit app (it sets a Booking Code)
     start31 = (today - timedelta(days=13)).replace(day=1).isoformat()  # month of the oldest pickable day
     created = [slim(r) for r in z.all("select %s from Booking where Created_Time between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (F, start31, end14))]
-    visits = [slim(r) for r in z.all("select %s from Booking where Date_Time between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (F, start31, end_vis))]
+    s30 = (today - timedelta(days=30)).isoformat()
+    vrows = z.all("select %s, Paid_On from Booking where Date_Time between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (F, min(start31, s30), end_vis))
+    visits = [slim(r) for r in vrows if (r.get("Date_Time") or "")[:10] >= start31]
 
     comp = [{"id": c.get("id"), "n": c.get("Name"), "cd": c.get("Complaint_Date"), "c": c.get("Created_Time"), "s": c.get("Complaint_Status"),
              "pr": c.get("Priority"), "cat": c.get("Complaint_Category"), "p": c.get("Provider.Name"), "f": c.get("Follow_up_Date"),
@@ -610,11 +667,11 @@ def main():
                    "s": o.get("Booking_Status"), "cat": o.get("Service_Category"), "svc": " ".join((o.get("Service_Breakdown") or "").split())[:400],
                    "p": o.get("Partner_Name.Name"), "inv": o.get("Invoice_Status"), "pay": o.get("Payment_Method"), "amt": o.get("Base_Price"),
                    "pets": o.get("Number_of_Pets"), "who": o.get("Pet_Owner.Name") or o.get("Customer_Clean_Name")}
-                  for o in z.all("select Name, Booking_Code, Created_Time, Date_Time, Booking_Status, Service_Category, Service_Breakdown, Pet_Owner.Name, Customer_Clean_Name, Partner_Name.Name, Invoice_Status, Payment_Method, Base_Price, Number_of_Pets from Booking where Booking_Code is not null")]
+                  for o in slow("app_orders", 3600, lambda: z.all("select Name, Booking_Code, Created_Time, Date_Time, Booking_Status, Service_Category, Service_Breakdown, Pet_Owner.Name, Customer_Clean_Name, Partner_Name.Name, Invoice_Status, Payment_Method, Base_Price, Number_of_Pets from Booking where Booking_Code is not null"))]
 
     items = [{"n": i.get("Name"), "code": i.get("Item_Code"), "q": i.get("Qty_On_Hand"), "r": i.get("Reserved_Qty"),
               "up": i.get("Unit_Price"), "cp": i.get("Cost_Price"), "sync": i.get("Last_Synced")}
-             for i in z.all("select Name, Item_Code, Qty_On_Hand, Reserved_Qty, Unit_Price, Cost_Price, Last_Synced from Xero_Items where id is not null")]
+             for i in slow("xero_items", 3600, lambda: z.all("select Name, Item_Code, Qty_On_Hand, Reserved_Qty, Unit_Price, Cost_Price, Last_Synced from Xero_Items where id is not null"))]
 
     # time off requests (custom module Leave_Requests, shown in Zoho as "Time Off Requests"; the reason stays in Zoho, it is not published)
     try:
@@ -670,17 +727,16 @@ def main():
             if l and d.get("Decision") in ("Approved", "Rejected") and hmac.compare_digest(str(d.get("Approval_Key") or ""), akey):
                 l.update(status=d["Decision"], by="%s (by email)" % (pc.get("_approver_own", "Charlene") if l["name"] == "Vince" else pc.get("_approver", "Approver")), when=d.get("Created_Time"))
 
-    s30 = (today - timedelta(days=30)).isoformat()
     inv = [{"d": b.get("Date_Time"), "s": b.get("Booking_Status"), "inv": b.get("Invoice_Status"), "po": b.get("Paid_On"),
             "pm": b.get("Payment_Method"), "amt": b.get("Base_Price"), "cat": b.get("Service_Category")}
-           for b in z.all("select Date_Time, Booking_Status, Invoice_Status, Paid_On, Payment_Method, Base_Price, Service_Category from Booking where Date_Time between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (s30, end14))]
+           for b in vrows if s30 <= (b.get("Date_Time") or "")[:10] <= end14]
 
     # leave credits (custom module Leave_Balances): one record per person and leave type with the year's allowance and
     # an opening balance on a date; build.py takes off approved time off from that date on. Admins edit it in Zoho.
     try:
         bal = [{"id": r.get("id"), "name": r.get("Team_Member"), "type": r.get("Leave_Type"), "allow": r.get("Allowance"),
                 "open": r.get("Opening_Balance"), "from": r.get("Opening_Date")}
-               for r in z.all("select Team_Member, Leave_Type, Allowance, Opening_Balance, Opening_Date from Leave_Balances where id is not null")]
+               for r in slow("leave_balances", 3600, lambda: z.all("select Team_Member, Leave_Type, Allowance, Opening_Balance, Opening_Date from Leave_Balances where id is not null"))]
     except SystemExit as e:
         print("WARNING leave balances could not be read:", str(e)[:120])
         bal = None
