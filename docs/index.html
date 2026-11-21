@@ -476,7 +476,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     </div>
     <div class="card">
       <h2>Needs the CS team</h2>
-      <p class="sub">Visits with something to do: no provider yet, a provider who declined or can't be reached, starting within 45 minutes, running late, or past their end time and still open in Zoho.</p>
+      <p class="sub">Visits with something to do: no provider yet, a provider who declined or can't be reached, starting within 45 minutes, running late (tell the customer), or past their end time and still open in Zoho.</p>
       <div class="tablewrap"><table id="psTodo"></table></div>
     </div>
     <div class="card">
@@ -494,9 +494,9 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
   <!-- PROVIDER STATUS MANUAL -->
   <section data-panel="manual">
     <div class="card">
-      <h2>Video: Provider Status with Professor Paws (1½ minutes)</h2>
+      <h2>Video: Provider Status with Professor Paws (1¾ minutes)</h2>
       <p class="sub">A quick walk through the buttons, the Live Status tab and what the CS team does. Drawn examples only, no real bookings.</p>
-      <video controls playsinline preload="none" poster="provider-status-training.jpg" src="provider-status-training.mp4?v=2" style="width:100%;max-width:880px;aspect-ratio:16/9;border-radius:10px;background:#000;display:block"></video>
+      <video controls playsinline preload="none" poster="provider-status-training.jpg" src="provider-status-training.mp4?v=3" style="width:100%;max-width:880px;aspect-ratio:16/9;border-radius:10px;background:#000;display:block"></video>
     </div>
     <div class="card">
       <h2>Provider Status: how it works</h2>
@@ -504,10 +504,10 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <h2 style="margin-top:6px">The journey of one visit</h2>
       <p class="sub">Each stop is a message the provider receives. The buttons are on the left; what Zoho records is on the right.</p>
       <div class="pm-map">
-      <div class="pm-stop"><div class="pm-when">Day before<small>6:00pm</small></div><div class="pm-body"><div class="pm-msg"><h3>Booking reminder</h3><p class="q">Date and time, service, pet, owner, address and notes.</p><div class="pm-row"><span class="pm-btn">Confirm</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Confirmed</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No tap by 8:00am on the visit day?</b> Zoho raises a CS task to call the provider.</p></div></div></div>
-      <div class="pm-stop"><div class="pm-when">2 hours before<small>the visit</small></div><div class="pm-body"><div class="pm-msg"><h3>Time to leave</h3><p class="q">Pet, owner, time, address and a Google Maps link.</p><div class="pm-row"><span class="pm-btn">On my way</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill brand">On the way</span><span class="pm-then">then "tap when you arrive"</span></span></div><div class="pm-row"><span class="pm-btn">Running late</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Delayed</span><span class="pm-then">then "how late?" 15, 30, 45 or 60 min, which sets the new arrival time</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No update 45 minutes before?</b> Zoho raises a CS task to call the provider.</p></div></div></div>
+      <div class="pm-stop"><div class="pm-when">Day before<small>6:00pm</small></div><div class="pm-body"><div class="pm-msg"><h3>Booking reminder</h3><p class="q">Date and time, service, pet, owner, address and notes.</p><div class="pm-row"><span class="pm-btn">Confirm</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Confirmed</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No tap by 8:00am on the visit day?</b> Zoho raises a CS task to message the provider on WhatsApp.</p></div></div></div>
+      <div class="pm-stop"><div class="pm-when">2 hours before<small>the visit</small></div><div class="pm-body"><div class="pm-msg"><h3>Time to leave</h3><p class="q">Pet, owner, time, address and a Google Maps link.</p><div class="pm-row"><span class="pm-btn">On my way</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill brand">On the way</span><span class="pm-then">then "tap when you arrive"</span></span></div><div class="pm-row"><span class="pm-btn">Running late</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Delayed</span><span class="pm-then">then "how late?" 15, 30, 45 or 60 min, which sets the new arrival time</span></span></div><div class="pm-row"><span class="pm-btn">Can't make it</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Provider declined</span><span class="pm-then">CS task: reassign the visit</span></span></div><p class="pm-net"><b>No update 45 minutes before?</b> Zoho raises a CS task to message the provider on WhatsApp.</p></div></div></div>
       <div class="pm-stop"><div class="pm-when">At the door<small>visit time</small></div><div class="pm-body"><div class="pm-msg"><h3>Arrive and start</h3><p class="q">Two short messages, one after the other.</p><div class="pm-row"><span class="pm-btn">Arrived</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Arrived</span><span class="pm-then">then "tap when you start"</span></span></div><div class="pm-row"><span class="pm-btn">Service started</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">In progress</span></span></div><p class="pm-net"><b>30 minutes late and not arrived?</b> Zoho raises a CS task. The Escalation SOP applies.</p></div></div></div>
-      <div class="pm-stop"><div class="pm-when">After the visit<small>5 min past end time</small></div><div class="pm-body"><div class="pm-msg"><h3>How did the visit go?</h3><div class="pm-row"><span class="pm-btn">Completed</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Completed</span><span class="pm-then">CS closes the booking in Zoho</span></span></div><div class="pm-row"><span class="pm-btn">Cancelled</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Cancelled</span><span class="pm-then">CS task: call the customer</span></span></div><div class="pm-row"><span class="pm-btn">Needs reschedule</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Needs reschedule</span><span class="pm-then">CS task: offer new slots</span></span></div></div></div></div>
+      <div class="pm-stop"><div class="pm-when">After the visit<small>5 min past end time</small></div><div class="pm-body"><div class="pm-msg"><h3>How did the visit go?</h3><div class="pm-row"><span class="pm-btn">Completed</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill on">Completed</span><span class="pm-then">CS closes the booking in Zoho</span></span></div><div class="pm-row"><span class="pm-btn">Cancelled</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill bad">Cancelled</span><span class="pm-then">CS task: contact the customer</span></span></div><div class="pm-row"><span class="pm-btn">Needs reschedule</span><span class="pm-arrow">→</span><span class="pm-out"><span class="pill warn">Needs reschedule</span><span class="pm-then">CS task: offer new slots</span></span></div></div></div></div>
       </div>
     </div>
     <div class="two">
@@ -516,7 +516,8 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
         <ul class="pm-list">
           <li>Watch <b>Live Status</b>. Each visit shows its step, and "Needs the CS team" lists what to act on.</li>
           <li>Work the Provider Status tasks in the <b>Task Tracker</b> like any other task.</li>
-          <li>When you call a provider yourself, set <b>Visit Status</b> on the booking with the Update button.</li>
+          <li>When you message a provider yourself on WhatsApp and they reply, set <b>Visit Status</b> on the booking with the Update button.</li>
+          <li>When a visit shows <b>Delayed</b>, message the customer the new arrival time. Customers are not told automatically yet.</li>
           <li>Still close each booking in Zoho (Completed, Cancelled or To be Rescheduled). A tap does not close it.</li>
         </ul>
       </div>
@@ -533,7 +534,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <h2>Good to know in week one</h2>
       <ul class="pm-list">
         <li><b>Providers get two sets of reminders for now.</b> The older reminders without buttons are still on until we switch them off.</li>
-        <li><b>Customers are not messaged automatically yet.</b> Keep updating customers the way you do today.</li>
+        <li><b>Customers are not messaged automatically yet.</b> That includes delays: when a provider taps Running late, message the customer the new arrival time yourself.</li>
         <li><b>"Nearby" is not live.</b> It needs the provider's location and comes in a later phase.</li>
         <li><b>A tap only counts from the provider on the booking.</b> If the number on the booking is wrong, the status will not update. Fix the number in Zoho.</li>
       </ul>
@@ -1292,14 +1293,14 @@ function render(day){
       (!r.p||/Pending/.test(r.s||''))?'Awaiting provider':nowM<mn(r.d)?'Scheduled':nowM<mn(r.e||r.d)?'Under way':'Not closed';
     const PRE=['Confirmed','On the way','Delayed','Nearby','Checking with provider'], etaM=r=>r.eta&&dayOf(r.eta)===pd?mn(r.eta):null;
     const step=r=>{ const g=stage(r), left=mn(r.d)-nowM;   // [tone, what the CS team does next]
-      if(g==='Provider declined') return ['bad','Provider can\'t make it: reassign, and call the customer'];
+      if(g==='Provider declined') return ['bad','Provider can\'t make it: reassign, and contact the customer'];
       if(g==='Checking with provider') return ['warn','Provider not reached: keep trying, and keep the customer updated'];
       if(PRE.includes(g)&&isT&&left<=-30) return ['bad','Over 30 min late and not arrived: Escalation SOP applies'];
-      if((g==='On the way'||g==='Delayed')&&isT&&etaM(r)!=null&&nowM>=etaM(r)+10) return ['warn','Arrival time '+tm(r.eta)+' has passed: call the provider'];
-      if(g==='Delayed') return ['',['Running late'+(r.dm?' about '+r.dm+' min':''),r.dl,r.eta?'new arrival '+tm(r.eta):''].filter(Boolean).join(' · ')];
+      if((g==='On the way'||g==='Delayed')&&isT&&etaM(r)!=null&&nowM>=etaM(r)+10) return ['warn','Arrival time '+tm(r.eta)+' has passed: message the provider on WhatsApp'];
+      if(g==='Delayed') return ['warn',['Tell the customer','Running late'+(r.dm?' about '+r.dm+' min':''),r.dl,r.eta?'new arrival '+tm(r.eta):''].filter(Boolean).join(' · ')];
       if(g==='On the way') return ['',r.eta?'Arriving about '+tm(r.eta):'On the way'];
       if(g==='Confirmed'&&isT&&left<=45) return ['warn',(left>=0?'Starts in '+left+' min':'Start time passed')+': check the provider is on the way'];
-      if(r.v&&r.ve&&['Cancelled','Needs reschedule'].includes(r.v)) return ['warn',r.v+' by the provider ('+r.ve+'): update Booking Status and call the customer'];
+      if(r.v&&r.ve&&['Cancelled','Needs reschedule'].includes(r.v)) return ['warn',r.v+' by the provider ('+r.ve+'): update Booking Status and contact the customer'];
       if(g==='Awaiting provider') return ['bad',(r.p?'Waiting on '+(/Owner/.test(r.s||'')?'the customer':'the time slot'):'No provider on the booking')+': settle it in Zoho'];
       if(g==='Not closed') return ['warn',(r.v==='Completed'?'Provider marked it completed':'Past its end time and still Scheduled')+': close it in Zoho'];
       if(g==='Scheduled'&&isT&&left<=45) return ['warn','Starts in '+left+' min: check the provider is on the way'];
