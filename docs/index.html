@@ -1298,13 +1298,13 @@ function render(day){
   }
 
   // ---- tasks ----
-  const stPill=s=>`<span class="pill ${s==='Completed'?'on':/Waiting/.test(s||'')?'warn':s==='In Progress'?'brand':''}">${esc(s||'No status')}</span>`;
+  const stPill=s=>`<span class="pill ${s==='Completed'?'on':/wait/i.test(s||'')?'warn':s==='In Progress'?'brand':''}">${esc(s||'No status')}</span>`;
   const ct=csR('tasks'), T=(D.tasks||[]).filter(t=>ct.all||ct.has(t.due)); const OPEN_T=t=>!['Completed','Cancelled','Deferred'].includes(t.s);
   const tOpen=T.filter(OPEN_T);
   { const tu=(CFG&&CFG.links||{}).tracker, a=$('tkTracker'); if(a){ if(tu) a.href=tu; a.hidden=!tu; } }
   const since14=addDays(now.day,-14);
   const ttile=(f,k,v,d)=>`<div class="tile click${TK_VIEW===f?' on':''}" role="button" tabindex="0" data-f="${f}" title="Show only these tasks"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d||'')}</div></div>`;
-  $('tkTiles').innerHTML=ttile('open','Open tasks',tOpen.length,T.length+(ct.all?' in Zoho CRM':' due in '+ct.label))+ttile('overdue','Overdue',tOpen.filter(t=>t.due&&t.due<now.day).length,'due before today')+ttile('today','Due today',tOpen.filter(t=>t.due===now.day).length,fmtDay(now.day))+ttile('waiting','Waiting',tOpen.filter(t=>/Waiting/.test(t.s||'')).length,'on a provider, customer or approval')+ttile('done','Done, 14 days',T.filter(t=>t.s==='Completed'&&dayOf(t.cl)>=since14).length,'');
+  $('tkTiles').innerHTML=ttile('open','Open tasks',tOpen.length,T.length+(ct.all?' in Zoho CRM':' due in '+ct.label))+ttile('overdue','Overdue',tOpen.filter(t=>t.due&&t.due<now.day).length,'due before today')+ttile('today','Due today',tOpen.filter(t=>t.due===now.day).length,fmtDay(now.day))+ttile('waiting','Waiting',tOpen.filter(t=>/wait/i.test(t.s||'')).length,'on a provider, customer or approval')+ttile('done','Done, 14 days',T.filter(t=>t.s==='Completed'&&dayOf(t.cl)>=since14).length,'');
   $('tkTiles').querySelectorAll('.tile.click').forEach(t=>{const go=()=>{TK_VIEW=TK_VIEW===t.dataset.f?'all':t.dataset.f; $('tkTiles').querySelectorAll('.tile.click').forEach(x=>x.classList.toggle('on',x.dataset.f===TK_VIEW)); renderBoard(); $('board').closest('.card').scrollIntoView({behavior:'smooth',block:'start'});}; t.addEventListener('click',go); t.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});});
   const ownSel=$('tkOwner'), cur=ownSel.value; const owners=[...new Set(T.map(t=>t.own).filter(Boolean))].sort();
   ownSel.innerHTML='<option value="">Everyone</option>'+owners.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
@@ -1453,15 +1453,15 @@ function renderBoard(){
   const now=sgNow(), q=($('tkSearch').value||'').toLowerCase(), who=$('tkOwner').value;
   const since14=addDays(now.day,-14);
   const isOpen=t=>!['Completed','Cancelled','Deferred'].includes(t.s);
-  const VIEW={all:()=>true, open:isOpen, overdue:t=>isOpen(t)&&t.due&&t.due<now.day, today:t=>isOpen(t)&&t.due===now.day, waiting:t=>isOpen(t)&&/Waiting/.test(t.s||''), done:t=>t.s==='Completed'&&(dayOf(t.cl)||'')>=since14}[TK_VIEW]||(()=>true);
+  const VIEW={all:()=>true, open:isOpen, overdue:t=>isOpen(t)&&t.due&&t.due<now.day, today:t=>isOpen(t)&&t.due===now.day, waiting:t=>isOpen(t)&&/wait/i.test(t.s||''), done:t=>t.s==='Completed'&&(dayOf(t.cl)||'')>=since14}[TK_VIEW]||(()=>true);
   const ct=csR('tasks');
   const T=(D.tasks||[]).filter(t=>(ct.all||ct.has(t.due))&&VIEW(t)&&(!who||t.own===who)&&(!q||[t.sub,t.own,t.type,t.s,t.ho,t.prov,t.bid].join(' ').toLowerCase().includes(q)));
   $('tkFilterNote').innerHTML=TK_VIEW==='all'?'':esc(TK_LABEL[TK_VIEW])+' · <a href="#tasks" id="tkClear">show all</a>';
   const clr=$('tkClear'); if(clr) clr.addEventListener('click',e=>{e.preventDefault(); TK_VIEW='all'; document.querySelectorAll('#tkTiles .tile.click').forEach(x=>x.classList.remove('on')); renderBoard();});
   const groups=[
-    {k:'todo',name:'To do',col:'#9aa9a6',f:t=>t.s==='Not Started'||!t.s},
+    {k:'todo',name:'To do',col:'#9aa9a6',f:t=>isOpen(t)&&t.s!=='In Progress'&&!/wait/i.test(t.s||'')},   // Not Started, To follow up and any other open status
     {k:'doing',name:'In progress',col:'#f0a23b',f:t=>t.s==='In Progress'},
-    {k:'wait',name:'Waiting',col:'#7c6fd6',f:t=>/Waiting/.test(t.s||'')},
+    {k:'wait',name:'Waiting',col:'#7c6fd6',f:t=>/wait/i.test(t.s||'')},
     {k:'done',name:'Done, last 14 days',col:'#2bb673',f:t=>t.s==='Completed'&&(dayOf(t.cl)||'')>=since14},
   ];
   if(!('done' in FOLD)) FOLD.done=true;
@@ -1475,7 +1475,7 @@ function renderBoard(){
     if(!rows.length) return;
     html+=`<div class="grp${FOLD[g.k]&&!filtered?' fold':''}" style="--gc:${g.col}" data-g="${g.k}"><button class="grp-h" type="button"><i class="dot"></i>${esc(g.name)}<span class="n">${rows.length}</span><span class="chev">▾</span></button><div class="grp-b">`;
     html+=rows.length?rows.map(t=>{
-      const meta=[g.k==='wait'?WAIT_ON[t.s]||'':'', t.wait||'', t.prov?t.prov:'', t.bid?'Booking '+t.bid:''].filter(Boolean).join(' · ');
+      const nice=x=>x.charAt(0)+x.slice(1).toLowerCase(), meta=[g.k==='wait'?WAIT_ON[t.s]||nice(t.s):(g.k==='todo'&&t.s&&t.s!=='Not Started'?nice(t.s):''), t.wait||'', t.prov?t.prov:'', t.bid?'Booking '+t.bid:''].filter(Boolean).join(' · ');
       const hi=/^High/.test(t.pr||'')?`<span class="tk-pr">${esc(t.pr)}</span>`:'';
       return `<div class="tk"><div class="tk-main"><div class="tk-sub">${recLink('task',t.id,t.sub||'(no subject)')}${hi}${/^TEST/i.test(t.sub||'')?' <span class="pill">test</span>':''}</div>${meta?`<div class="tk-meta">${esc(meta)}</div>`:''}</div>
         <div class="tk-side"><span class="tk-own">${t.own?`<span class="av" style="background:${avCol(t.own)}" title="${esc(t.own)}">${esc(initials(t.own))}</span>${esc(t.own.split(' ')[0])}`:'<span class="muted">No owner</span>'}</span>${dueTxt(t)}</div></div>`;
