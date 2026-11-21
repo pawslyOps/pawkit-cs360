@@ -433,7 +433,7 @@ def main():
 
     hist = customer_history(z, today)
     first = hist["first"]
-    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At"
+    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At"
 
     def owner(r):
         o = r.get("Pet_Owner")
@@ -463,7 +463,7 @@ def main():
                       "a": r.get("Area"), "inv": r.get("Invoice_Status"), "pay": r.get("Payment_Method"),
                       "amt": r.get("Base_Price"), "o": (owner(r) or "")[-7:] or None, "rep": repeat(r), **why(r),
                       "ref": r.get("Name"), **{k: r[f] for k, f in (("v", "Visit_Status"), ("vt", "Status_Updated_At"), ("vb", "Status_Updated_By"), ("eta", "Provider_ETA"),
-                                                 ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At")) if r.get(f) not in (None, "")},
+                                                 ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At"), ("cw", "Customer_Told_On_The_Way_At")) if r.get(f) not in (None, "")},
                       **({"rp": 1} if r.get("Reminder_Provider_Sent") else {}), **({"ro": 1} if r.get("Reminder_Owner_Sent") else {}),
                       **({"app": True} if r.get("Booking_Code") else {})}   # booked through the Pawkit app (it sets a Booking Code)
     start31 = (today - timedelta(days=13)).replace(day=1).isoformat()  # month of the oldest pickable day
