@@ -23,8 +23,19 @@ def post(url, data):
         return json.load(r)
 
 
+PAUSE = os.path.join(HERE, "raw", "zoho_pause.json")
+
+
 class Zoho:
     def __init__(self):
+        try:   # Zoho said the API limit was reached: make no calls at all until the pause ends
+            with open(PAUSE) as f:
+                p = json.load(f)
+            if p.get("until", 0) > time.time():
+                raise SystemExit("paused: Zoho API limit (%s), trying again at %s" % (p.get("why", "")[:80],
+                                 datetime.fromtimestamp(p["until"], SGT).strftime("%H:%M")))
+        except (OSError, ValueError):
+            pass
         self.c = json.load(open(CFG))
         self.api = self.c.get("api_domain", "https://www.zohoapis.com")
         self.tok, self.exp = None, 0
@@ -63,7 +74,10 @@ class Zoho:
             "grant_type": "refresh_token", "refresh_token": self.c["refresh_token"],
             "client_id": self.c["client_id"], "client_secret": self.c["client_secret"]})
 
+    calls = {"n": 0, "rows": 0}
+
     def req(self, path, body=None):
+        Zoho.calls["n"] += 1
         h = {"Authorization": "Zoho-oauthtoken " + self.token()}
         data = None
         if body is not None:
@@ -76,10 +90,19 @@ class Zoho:
         except urllib.error.HTTPError as e:
             if e.code == 204:
                 return {}
-            raise SystemExit("Zoho %s failed: %s %s" % (path, e.code, e.read()[:300]))
+            body = e.read()[:300]
+            txt = body.decode("utf-8", "replace")
+            if e.code == 429 or "LIMIT" in txt.upper():
+                # credits used up -> pause an hour; too many calls at once -> pause 5 minutes
+                secs = 300 if "TOO_MANY_REQUESTS" in txt.upper() else 3600
+                with open(PAUSE, "w") as f:
+                    json.dump({"until": time.time() + secs, "why": "%s %s" % (e.code, txt[:200]), "at": datetime.now(SGT).isoformat(timespec="seconds")}, f)
+            raise SystemExit("Zoho %s failed: %s %s" % (path, e.code, body))
 
     def coql(self, q):
-        return self.req("/crm/v5/coql", {"select_query": q})
+        j = self.req("/crm/v5/coql", {"select_query": q})
+        Zoho.calls["rows"] += len(j.get("data", []) or [])
+        return j
 
     def all(self, q):
         out, off = [], 0
@@ -110,16 +133,46 @@ def is_auto(data):
     return AUTO_TEXT in text.lower()
 
 
-def whatsapp_status(z, now):
+WA_ROWS = os.path.join(HERE, "raw", "wa_rows.json")
+WA_FIELDS = "From, To, Direction, Message_Type, Message_Date_time, Member_Id, Message_Data, Lead.Full_Name, Channel_Type".split(", ")
+
+
+def wa_rows(z, now, full):
+    """The last 48 hours of one-to-one WhatsApp log rows. A full run reads all 48 hours from Zoho; a fast run asks
+    only for rows since the last read (minus a 10-minute overlap for late logs) and merges them by id."""
+    try:
+        with open(WA_ROWS) as f:
+            c = json.load(f)
+        rows, upto = c["rows"], c["upto"]
+    except (OSError, ValueError, KeyError):
+        rows, upto, full = {}, None, True
+    start48 = (now - timedelta(hours=48)).isoformat(timespec="seconds")
+    since = start48 if full else (datetime.fromisoformat(upto) - timedelta(minutes=10)).isoformat(timespec="seconds")
+    if since < start48:
+        since = start48
+    q = "select %s from %sWoztell_logs where %sMessage_Date_time between '%s' and '%s'" % (
+        ", ".join(W + f for f in WA_FIELDS), W, W, since, now.isoformat(timespec="seconds"))
+    new = z.all(q)
+    if full:
+        rows = {}
+    for r in new:
+        rows[r.get("id") or "%s|%s|%s" % (r.get(W + "Message_Date_time"), r.get(W + "From"), r.get(W + "Message_Type"))] = r
+    rows = {k: r for k, r in rows.items() if (r.get(W + "Message_Date_time") or "") >= start48}
+    tmp = WA_ROWS + ".%d.tmp" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump({"upto": now.isoformat(timespec="seconds"), "rows": rows}, f)
+    os.replace(tmp, WA_ROWS)
+    return list(rows.values())
+
+
+def whatsapp_status(z, now, rows=None):
     """Looks at the last 48 hours of one-to-one WhatsApp messages and groups them by customer. A conversation is
     'waiting' when the customer's latest message has no Pawkit message after it (a bare thanks/ok/emoji does not count
     as needing a reply). It is 'urgent' when it has waited URGENT_AFTER_MIN minutes or contains an urgent word.
     For waiting chats the unanswered messages themselves are published too (inside the encrypted data), so the
     team can read them from the page; answered chats publish no text."""
-    start = (now - timedelta(hours=48)).isoformat(timespec="seconds")
-    q = ("select %sFrom, %sTo, %sDirection, %sMessage_Type, %sMessage_Date_time, %sMember_Id, %sMessage_Data, %sLead.Full_Name, %sChannel_Type from %sWoztell_logs "
-         "where %sMessage_Date_time between '%s' and '%s'" % (W, W, W, W, W, W, W, W, W, W, W, start, now.isoformat(timespec="seconds")))
-    rows = z.all(q)
+    if rows is None:
+        rows = wa_rows(z, now, full=True)
     try:   # automated senders to leave out (private config)
         with open(os.path.expanduser("~/.config/pawkit-cs360/config.json")) as f:
             ignore = set(json.load(f).get("_wa_ignore_numbers") or [])
@@ -382,6 +435,78 @@ def sheet_roster(z):
     return cache.get("roster") or {}
 
 
+def why(r):  # why a booking did not go ahead: Zoho's closure reason plus the staff's reason text and internal note
+    if r.get("Booking_Status") in ("Scheduled", "Completed"):
+        return {}
+    seen, notes = set(), []
+    for k in ("Reason", "Reason_Note", "Note"):
+        t = " ".join((r.get(k) or "").split())
+        if t and t.lower() not in seen:
+            seen.add(t.lower()); notes.append(t)
+    out = {}
+    if r.get("Reason_Not_Fulfilled"):
+        out["why"] = r["Reason_Not_Fulfilled"]
+    if notes:
+        out["whyn"] = " · ".join(notes)[:300]
+    return out
+
+
+# Booking fields the Live Status tab needs, and their short keys in the published visit records
+LIVE_KEYS = (("v", "Visit_Status"), ("vt", "Status_Updated_At"), ("vb", "Status_Updated_By"), ("eta", "Provider_ETA"),
+             ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At"),
+             ("cw", "Customer_Told_On_The_Way_At"))
+
+
+def fast():
+    """Every ~2 minutes: only WhatsApp messages since the last read and the status fields of today's and tomorrow's
+    visits, patched into the last full snapshot (raw/crm.json). Everything else waits for the 15-minute full run."""
+    path = os.path.join(HERE, "raw", "crm.json")
+    try:
+        with open(path) as f:
+            out = json.load(f)
+    except (OSError, ValueError):
+        raise SystemExit("fast: no full snapshot yet, waiting for the full run")
+    now = datetime.now(SGT)
+    z = Zoho()
+    try:
+        out["wa_now"] = whatsapp_status(z, now, wa_rows(z, now, full=False))
+    except SystemExit as e:
+        print("WARNING fast WhatsApp read failed:", str(e)[:160])
+        if "paused" in str(e) or os.path.exists(PAUSE) and json.load(open(PAUSE)).get("until", 0) > time.time():
+            raise
+    d0, d1 = now.date().isoformat(), (now.date() + timedelta(days=1)).isoformat()
+    fields = ["Date_Time", "End_Time", "Booking_Status", "Partner_Name.Name", "Reason_Not_Fulfilled", "Reason", "Reason_Note", "Note",
+              "Reminder_Provider_Sent", "Reminder_Owner_Sent"] + [f for _, f in LIVE_KEYS]
+    rows = z.all("select %s from Booking where Date_Time between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (", ".join(fields), d0, d1))
+    byid = {v.get("id"): v for v in out.get("visits") or []}
+    patched = 0
+    for r in rows:
+        v = byid.get(r.get("id"))
+        if not v:      # a booking made since the full run: it appears with the next full run
+            continue
+        v.update({"d": r.get("Date_Time"), "e": r.get("End_Time"), "s": r.get("Booking_Status"), "p": r.get("Partner_Name.Name")})
+        for k, f in LIVE_KEYS:
+            if r.get(f) in (None, ""):
+                v.pop(k, None)
+            else:
+                v[k] = r[f]
+        for k, f in (("rp", "Reminder_Provider_Sent"), ("ro", "Reminder_Owner_Sent")):
+            if r.get(f):
+                v[k] = 1
+            else:
+                v.pop(k, None)
+        v.pop("why", None); v.pop("whyn", None); v.update(why(r))
+        patched += 1
+    out["generated"] = now.isoformat(timespec="seconds")
+    out["fast"] = True
+    tmp = path + ".%d.tmp" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(out, f)
+    os.replace(tmp, path)
+    print(now.strftime("%Y-%m-%d %H:%M:%S"), "fast ok", patched, "visits patched,", len((out.get("wa_now") or {}).get("waiting") or []),
+          "waiting chats,", Zoho.calls["n"], "zoho calls,", Zoho.calls["rows"], "coql rows")
+
+
 def rng(d):
     return "between '%sT00:00:00+08:00' and '%sT23:59:59+08:00'" % (d, d)
 
@@ -439,21 +564,6 @@ def main():
         o = r.get("Pet_Owner")
         return o.get("id") if isinstance(o, dict) else None
 
-    def why(r):  # why a booking did not go ahead: Zoho's closure reason plus the staff's reason text and internal note
-        if r.get("Booking_Status") in ("Scheduled", "Completed"):
-            return {}
-        seen, notes = set(), []
-        for k in ("Reason", "Reason_Note", "Note"):
-            t = " ".join((r.get(k) or "").split())
-            if t and t.lower() not in seen:
-                seen.add(t.lower()); notes.append(t)
-        out = {}
-        if r.get("Reason_Not_Fulfilled"):
-            out["why"] = r["Reason_Not_Fulfilled"]
-        if notes:
-            out["whyn"] = " · ".join(notes)[:300]
-        return out
-
     def repeat(r):  # the customer had a completed visit before this booking's date
         f = first.get(owner(r) or "")
         when = (r.get("Date_Time") or r.get("Created_Time") or "")[:10]
@@ -462,8 +572,7 @@ def main():
                       "cat": r.get("Service_Category"), "src": None, "by": nm(r.get("Created_By")), "p": r.get("Partner_Name.Name"),
                       "a": r.get("Area"), "inv": r.get("Invoice_Status"), "pay": r.get("Payment_Method"),
                       "amt": r.get("Base_Price"), "o": (owner(r) or "")[-7:] or None, "rep": repeat(r), **why(r),
-                      "ref": r.get("Name"), **{k: r[f] for k, f in (("v", "Visit_Status"), ("vt", "Status_Updated_At"), ("vb", "Status_Updated_By"), ("eta", "Provider_ETA"),
-                                                 ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At"), ("cw", "Customer_Told_On_The_Way_At")) if r.get(f) not in (None, "")},
+                      "ref": r.get("Name"), **{k: r[f] for k, f in LIVE_KEYS if r.get(f) not in (None, "")},
                       **({"rp": 1} if r.get("Reminder_Provider_Sent") else {}), **({"ro": 1} if r.get("Reminder_Owner_Sent") else {}),
                       **({"app": True} if r.get("Booking_Code") else {})}   # booked through the Pawkit app (it sets a Booking Code)
     start31 = (today - timedelta(days=13)).replace(day=1).isoformat()  # month of the oldest pickable day
@@ -582,8 +691,8 @@ def main():
     with open(tmp, "w") as f:
         json.dump(out, f)
     os.replace(tmp, os.path.join(HERE, "raw", "crm.json"))
-    print(now.strftime("%Y-%m-%d %H:%M"), "ok", len(created), "made,", len(visits), "visits,", len(tasks), "tasks,", len(comp), "complaints")
+    print(now.strftime("%Y-%m-%d %H:%M"), "ok", len(created), "made,", len(visits), "visits,", len(tasks), "tasks,", len(comp), "complaints,", Zoho.calls["n"], "zoho calls,", Zoho.calls["rows"], "coql rows")
 
 
 if __name__ == "__main__":
-    main()
+    fast() if "--fast" in sys.argv else main()

@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ITER = 310000
-REFRESH_SECONDS = 60  # seconds between updates: launchd waits StartInterval (30) after a run ends and a run takes about 30; the page times its checks from this
+REFRESH_SECONDS = 120  # 21 Nov: fast job (WhatsApp + Live Status) every ~2 min; full run every 15 min. 1/min used up the Zoho API credits.
 SGT = timezone(timedelta(hours=8))
 
 
