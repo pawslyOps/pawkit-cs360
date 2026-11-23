@@ -615,7 +615,7 @@ def main():
 
     hist = customer_history(z, today)
     first = hist["first"]
-    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At, Customer_Confirmed, Customer_Rating, Customer_Comment, Late_Credit_Amount, Late_Credit_Expires, Survey_Sent_At, Late_Credit_Given_At, Late_Credit_Used, Customer_Clean_Name"
+    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At, Customer_Confirmed, Customer_Rating, Customer_Comment, Late_Credit_Amount, Late_Credit_Expires, Survey_Sent_At, Late_Credit_Given_At, Late_Credit_Used, Customer_Clean_Name, Dissatisfaction_Reason"
 
     def owner(r):
         o = r.get("Pet_Owner")
@@ -748,7 +748,7 @@ def main():
     # so no extra calls. Once a week the full lists are re-read (2 calls) to pick up changes to visits older than the visit window,
     # such as Late Credit Used ticked on an old booking.
     rating_row = lambda r: {"id": r.get("id"), "ref": r.get("Name"), "d": r.get("Date_Time"), "p": r.get("Partner_Name.Name"), "cat": r.get("Service_Category"),
-                            "at": r.get("Survey_Sent_At"), "cf": r.get("Customer_Confirmed"), "cr": r.get("Customer_Rating"), "cm": r.get("Customer_Comment")}
+                            "at": r.get("Survey_Sent_At"), "cf": r.get("Customer_Confirmed"), "cr": r.get("Customer_Rating"), "cm": r.get("Customer_Comment"), "dr": r.get("Dissatisfaction_Reason")}
     credit_row = lambda r: {"id": r.get("id"), "ref": r.get("Name"), "d": r.get("Date_Time"), "p": r.get("Partner_Name.Name"),
                             "who": r.get("Pet_Owner.Name") or r.get("Customer_Clean_Name"), "amt": r.get("Late_Credit_Amount"), "at": r.get("Late_Credit_Given_At"),
                             "x": r.get("Late_Credit_Expires"), "used": bool(r.get("Late_Credit_Used")), "dm": r.get("Delay_Minutes"), "why": r.get("Delay_Reason")}
@@ -760,7 +760,7 @@ def main():
         store = {}
     rs, cs = store.setdefault("ratings", {}), store.setdefault("credits", {})
     try:
-        for r in slow("ratings_weekly", 7 * 86400, lambda: z.all("select Name, Date_Time, Partner_Name.Name, Service_Category, Survey_Sent_At, Customer_Confirmed, Customer_Rating, Customer_Comment from Booking where Survey_Sent_At is not null")):
+        for r in slow("ratings_weekly", 7 * 86400, lambda: z.all("select Name, Date_Time, Partner_Name.Name, Service_Category, Survey_Sent_At, Customer_Confirmed, Customer_Rating, Customer_Comment, Dissatisfaction_Reason from Booking where Survey_Sent_At is not null")):
             rs[r["id"]] = rating_row(r)
         for r in slow("credits_weekly", 7 * 86400, lambda: z.all("select Name, Date_Time, Partner_Name.Name, Pet_Owner.Name, Customer_Clean_Name, Late_Credit_Amount, Late_Credit_Given_At, Late_Credit_Expires, Late_Credit_Used, Delay_Minutes, Delay_Reason from Booking where Late_Credit_Given_At is not null")):
             cs[r["id"]] = credit_row(r)
