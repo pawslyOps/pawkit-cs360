@@ -1149,6 +1149,7 @@ function applyLeave(){
   });
 }
 function shiftHours(code){const c=(CFG.shift_codes||{})[code];return (c&&c.hours)||[];}
+function codeLabel(code,p){ return code==='OFF'&&p&&p.off_label?p.off_label:((CFG.shift_codes||{})[code]||{}).label||code; }   // a person can show OFF under their own wording (off_label in config)
 function hoursText(code){const h=shiftHours(code);return h.length?h.map(([a,b])=>t12(a)+'–'+t12(b)).join(', '):'';}
 function onAt(code,min){return shiftHours(code).some(([a,b])=>min>=toMin(a)&&min<toMin(b));}
 
@@ -1194,7 +1195,7 @@ function render(day){
     const nowOn=roster&&isToday?agents.filter(p=>onAt(roster[p.name],now.min)):[];
     const L=D.leave||[], offDay=L.filter(l=>l.status==='Approved'&&l.from<=day&&(l.to||l.from)>=day), pendL=L.filter(l=>l.status==='Pending');
     const chips=CFG.people.map(p=>{ const c=roster?roster[p.name]:null, lv=['LEAVE','SICK'].includes(c), on=isToday&&c&&onAt(c,now.min), work=c&&shiftHours(c).length;
-      return `<span class="chip ${on?'on':lv?'lv':work?'':'off'}" title="${esc(c?(hoursText(c)||(CFG.shift_codes[c]||{}).label||c):'No schedule')}">${esc(p.name)}${on?' · on now':lv?' · '+esc(((CFG.shift_codes[c]||{}).label||c).toLowerCase()):work?' · '+esc(c):' · off'}</span>`; }).join('');
+      return `<span class="chip ${on?'on':lv?'lv':work?'':'off'}" title="${esc(c?(hoursText(c)||codeLabel(c,p)):'No schedule')}">${esc(p.name)}${on?' · on now':lv?' · '+esc(((CFG.shift_codes[c]||{}).label||c).toLowerCase()):work?' · '+esc(c):' · off'}</span>`; }).join('');
     const wf=card('workforce','People','Workforce','go:schedule',[
       st(isToday?nowOn.length:onCount,(isToday?'agents on shift now':'agents on shift')+(roster?split(p=>isToday?onAt(roster[p.name],now.min):shiftHours(roster[p.name]).length):''),'go:schedule',isToday&&roster&&!nowOn.length&&now.min>=toMin('09:00')&&now.min<toMin('22:00')?'bad':''),
       st(onCount,'agents working '+dayLbl+(roster?split(p=>shiftHours(roster[p.name]).length):''),'go:schedule'),
@@ -1322,7 +1323,7 @@ function render(day){
     let bars='';
     if(hrs.length) bars=hrs.map(([a,b])=>`<div class="bar ${p.agent?'':'mgr'}" style="left:${pct(toMin(a))}%;width:${pct(toMin(b))-pct(toMin(a))}%" title="${esc(p.name)}: ${esc(t12(a))}–${esc(t12(b))}">${esc(code)} ${esc(t12(a))}–${esc(t12(b))}</div>`).join('');
     else if(code==='ON') bars=`<div class="bar unk" style="left:${pct(9*60)}%;width:${pct(18*60)-pct(9*60)}%">Working, hours not set</div>`;
-    else bars=`<div class="tag" style="left:8px">${esc(code?((CFG.shift_codes[code]||{}).label||code):'Not on the schedule')}</div>`;
+    else bars=`<div class="tag" style="left:8px">${esc(code?codeLabel(code,p):'Not on the schedule')}</div>`;
     tl+=`<div class="row"><div class="name">${esc(p.name)}<small>${esc(p.role)}</small></div><div class="track">${grid()}${bars}</div></div>`;
   });
   TEAMS.forEach(([lbl,grp])=>{ const cap=Math.min(3,grp.length);   // green once the whole team, or three people, are on
@@ -1372,10 +1373,10 @@ function render(day){
       const a=hit(lv,n,d); if(a) return kind(a);
       if(c==='OFF') return c;                              // already a rest day: no time off needed
       const q=hit(pend,n,d); return q?kind(q)+'?':''; };   // asked for, not decided yet
-    const rowsOff=CFG.people.map(p=>({n:p.name,c:wd.map(d=>cell(p.name,d))})), any=rowsOff.some(r=>r.c.some(Boolean));
+    const rowsOff=CFG.people.map(p=>({n:p.name,p,c:wd.map(d=>cell(p.name,d))})), any=rowsOff.some(r=>r.c.some(Boolean));
     $('offSub').textContent=(sched?'Rest days from the schedule tracker, with time off added.':'Rest days for this week are not in the schedule tracker yet, so this shows time off only.'+(any?'':' Nobody has time off approved or pending this week.'))+' Requests still waiting for approval are marked pending.';
     $('offWeek').innerHTML='<tr><th>Name</th>'+wd.map(d=>`<th>${esc(fmtDay(d))}</th>`).join('')+'</tr>'+
-      rowsOff.map(r=>'<tr><td>'+esc(r.n)+'</td>'+r.c.map(c=>{const pd=c.endsWith('?'), k=pd?c.slice(0,-1):c; return `<td>${c?`<span class="pill ${k==='OFF'?'':pd?'':'warn'}"${pd?' style="border:1px dashed var(--warn);background:transparent" title="Waiting for approval"':''}>${esc(((CFG.shift_codes[k]||{}).label||k)+(pd?' · pending':''))}</span>`:''}</td>`;}).join('')+'</tr>').join('');
+      rowsOff.map(r=>'<tr><td>'+esc(r.n)+'</td>'+r.c.map(c=>{const pd=c.endsWith('?'), k=pd?c.slice(0,-1):c; return `<td>${c?`<span class="pill ${k==='OFF'?'':pd?'':'warn'}"${pd?' style="border:1px dashed var(--warn);background:transparent" title="Waiting for approval"':''}>${esc(codeLabel(k,r.p)+(pd?' · pending':''))}</span>`:''}</td>`;}).join('')+'</tr>').join('');
     if(!$('offSel').dataset.on){ $('offSel').dataset.on=1; const go=w=>{OFF_WK=w; render($('day').value);};
       $('offSel').addEventListener('change',e=>go(e.target.value));
       $('offPrev').addEventListener('click',()=>{const o=[...$('offSel').options].map(x=>x.value);go(o[Math.max(0,o.indexOf(OFF_WK)-1)]);});
