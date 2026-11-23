@@ -135,6 +135,7 @@ def main():
         "inv": raw.get("inv", []),
         "ratings": raw.get("ratings"),
         "credits": raw.get("credits"),
+        "notice": raw.get("notice"),
         "config": {k: v for k, v in cfg.items() if not k.startswith("_")},
         "payboy_synced": pb.get("synced"),
         "leave_bal": leave_bal,

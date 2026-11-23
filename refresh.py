@@ -776,9 +776,21 @@ def main():
         json.dump(store, f)
     os.replace(tmp, store_path)
     ratings, credits = list(rs.values()), list(cs.values())
+    # running-late rules notice: who has it and who tapped "I have read this" (2 reads, cached 6 h)
+    notice = {"sent": [], "read": []}
+    try:
+        def norm(n):
+            d = "".join(ch for ch in str(n or "") if ch.isdigit())
+            return "65" + d if len(d) == 8 else d
+        reads = {norm(r.get("Name")) for r in slow("notice_reads", 6 * 3600, lambda: z.all("select Name from Provider_Messages where Booking_Ref = 'LATE2311' and Message_Kind = 'ReadAck'"))}
+        for r in slow("notice_sent", 6 * 3600, lambda: z.all("select Name, Phone_Number, Lateness_Notice_Sent_At from Partner where Lateness_Notice_Sent_At is not null")):
+            notice["sent"].append({"p": (r.get("Name") or "").strip(), "at": r.get("Lateness_Notice_Sent_At"), "read": norm(r.get("Phone_Number")) in reads})
+        notice["read"] = len(reads)
+    except SystemExit as e:
+        print("WARNING notice read skipped:", str(e)[:120])
 
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)
