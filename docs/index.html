@@ -1388,7 +1388,8 @@ function render(day){
 
   // ---- provider status: each visit's step, worked out from Booking Status, the provider and the clock ----
   { const pd=PS_TOM?addDays(now.day,1):day, nowM=pd<now.day?1e6:pd>now.day?-1e6:now.min, isT=pd===now.day;
-    const V=D.visits.filter(r=>dayOf(r.d)===pd).sort((a,b)=>(a.d||'').localeCompare(b.d||''));
+    // teleconsults and other remote services have no home visit, so they are not tracked here (Zoho variable No_Visit_Services)
+    const V=D.visits.filter(r=>dayOf(r.d)===pd&&r.cat!=='Teleconsult'&&r.cat!=='Remote Service').sort((a,b)=>(a.d||'').localeCompare(b.d||''));
     const tm=iso=>iso?t12(iso.slice(11,16)):'', mn=iso=>iso?toMin(iso.slice(11,16)):0;
     // Booking Status closes a visit; otherwise the Visit Status set in Zoho wins; with neither, the step comes from the provider and the clock
     const stage=r=>['Cancelled','Refund'].includes(r.s)?'Cancelled':r.s==='To be Rescheduled'?'Needs reschedule':r.s==='Completed'?'Completed':
