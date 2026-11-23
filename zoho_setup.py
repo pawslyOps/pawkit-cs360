@@ -80,6 +80,14 @@ def exchange(got):
 
 def save(got, j):
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    try:   # keep the sign-in being replaced, so a switch of client can be undone (same private folder, same permissions)
+        with open(OUT) as f:
+            old = f.read()
+        bfd = os.open(OUT + ".prev", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(bfd, "w") as f:
+            f.write(old)
+    except OSError:
+        pass
     fd = os.open(OUT, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump({"client_id": got["cid"], "client_secret": got["sec"], "refresh_token": j["refresh_token"],
