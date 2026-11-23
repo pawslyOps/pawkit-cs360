@@ -575,6 +575,11 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <div class="tablewrap"><table id="saCat"></table></div>
     </div>
     <div class="card">
+      <h2>Late-arrival credits</h2>
+      <p class="sub">When a provider confirms a delay of 30 to 60 minutes for a reason of their own, the customer automatically gets $20 off the next booking, valid for 3 months (Escalation SOP, section 4). One per late booking. When the customer books again, take the amount off and tick <b>Late Credit Used</b> on this booking in Zoho.</p>
+      <div class="tablewrap"><table id="saCred"></table></div>
+    </div>
+    <div class="card">
       <h2>Every rating</h2>
       <p class="sub filternote" id="saNote"></p>
       <div class="tablewrap"><table id="saAll"></table></div>
@@ -613,6 +618,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
           <li>Work the Provider Status tasks in the <b>Task Tracker</b> like any other task.</li>
           <li>When you message a provider yourself on WhatsApp and they reply, set <b>Visit Status</b> on the booking with the Update button.</li>
           <li>When a provider is late, the <b>customer is told automatically</b> once the provider confirms the delay by tapping a reason. Live Status then shows "Customer told at" with the time. If it still says "Waiting for the provider to confirm" after a few minutes, message the customer the new arrival time yourself.</li>
+          <li><b>Late-arrival credit, automatic</b> (built, and switched on once WhatsApp approves the message). If the provider confirms a delay of 30 to 60 minutes and the reason is their own (traffic, an earlier visit running over, a transport issue), the customer also gets a WhatsApp with <b>$20 off the next booking</b>, valid for 3 months, one per late booking (Escalation SOP, section 4). Weather or a personal emergency does not trigger it: CS decides those. The credits are listed under Service Satisfaction. Over 60 minutes late or a no-show stays with CS: offer a free priority rebooking.</li>
           <li>Still close each booking in Zoho (Completed, Cancelled or To be Rescheduled). A tap does not close it.</li>
         </ul>
       </div>
@@ -1393,7 +1399,7 @@ function render(day){
       if(g==='Checking with provider') return ['warn','Provider not reached: keep trying, and keep the customer updated'];
       if(PRE.includes(g)&&isT&&left<=-30) return ['bad','Over 30 min late and not arrived: Escalation SOP applies'];
       if((g==='On the way'||g==='Delayed')&&isT&&etaM(r)!=null&&nowM>=etaM(r)+10) return ['warn','Arrival time '+tm(r.eta)+' has passed: message the provider on WhatsApp'];
-      if(g==='Delayed'){ const d=['Running late'+(r.dm?' about '+r.dm+' min':''),r.dl,r.eta?'new arrival '+tm(r.eta):'']; if(r.ct) return ['brand',['Customer told at '+tm(r.ct)].concat(d).filter(Boolean).join(' · ')]; return ['warn',[r.dm?'Waiting for the provider to confirm the delay':'Waiting for the provider to say how late'].concat(d).filter(Boolean).join(' · ')]; }
+      if(g==='Delayed'){ const d=['Running late'+(r.dm?' about '+r.dm+' min':''),r.dl,r.eta?'new arrival '+tm(r.eta):'']; if(r.ct) return ['brand',['Customer told at '+tm(r.ct)].concat(d,r.lc?['$'+r.lc+' late credit sent to the customer']:[]).filter(Boolean).join(' · ')]; return ['warn',[r.dm?'Waiting for the provider to confirm the delay':'Waiting for the provider to say how late'].concat(d).filter(Boolean).join(' · ')]; }
       if(g==='On the way') return ['',[r.eta?'Arriving about '+tm(r.eta):'On the way',r.cw?'customer told at '+tm(r.cw):''].filter(Boolean).join(' · ')];
       if(g==='Confirmed'&&isT&&left<=45) return ['warn',(left>=0?'Starts in '+left+' min':'Start time passed')+': check the provider is on the way'];
       if(r.v&&r.ve&&['Cancelled','Needs reschedule'].includes(r.v)) return ['warn',r.v+' by the provider ('+r.ve+'): update Booking Status and contact the customer'];
@@ -1453,6 +1459,8 @@ function render(day){
     const L=ans.slice().sort((a,b)=>(b.d||'').localeCompare(a.d||''));
     $('saNote').textContent=L.length+' answer'+(L.length===1?'':'s')+', newest visit first. Low ratings and "not completed" answers also raise a task for CS.';
     $('saAll').innerHTML=L.length?'<tr><th>Visit</th><th>Booking</th><th>Provider</th><th>Service</th><th>Completed?</th><th>Rating</th><th>Comment</th></tr>'+L.map(r=>`<tr><td style="white-space:nowrap">${esc(fmtDay(dayOf(r.d)))}</td><td>${recLink('booking',r.id,r.ref||'Booking')}</td><td>${esc(r.p||'')}</td><td>${esc(r.cat||'')}</td><td>${r.cf?`<span class="pill ${r.cf==='No'?'bad':'on'}">${esc(r.cf)}</span>`:''}</td><td style="white-space:nowrap">${r.cr?stars(r.cr)+' '+r.cr:'<span class="sub">no rating</span>'}</td><td>${esc(r.cm||'')}</td></tr>`).join(''):'<tr><td class="sub">No answers yet.</td></tr>';
+    const CR=(D.credits||D.visits.filter(r=>r.lc).map(r=>({...r,amt:r.lc,x:r.lcx}))).slice().sort((a,b)=>(b.d||'').localeCompare(a.d||''));
+    $('saCred').innerHTML=CR.length?'<tr><th>Visit</th><th>Booking</th><th>Customer</th><th>Provider</th><th>Late by</th><th class="num">Credit</th><th>Valid until</th><th>Status</th></tr>'+CR.map(r=>{ const st=r.used?['on','Used']:(r.x&&r.x<now.day?['','Expired']:['warn','To use']); return `<tr><td style="white-space:nowrap">${esc(fmtDay(dayOf(r.d)))}</td><td>${recLink('booking',r.id,r.ref||'Booking')}</td><td>${esc(r.who||'')}</td><td>${esc(r.p||'')}</td><td>${esc([r.dm?r.dm+' min':'',r.why||r.dl].filter(Boolean).join(' · '))}</td><td class="num">$${esc(r.amt)}</td><td style="white-space:nowrap">${esc(r.x?fmtDay(r.x):'')}</td><td><span class="pill ${st[0]}">${st[1]}</span></td></tr>`; }).join(''):'<tr><td class="sub">No late-arrival credits given yet.</td></tr>';
     if(!$('saSeg').dataset.on){ $('saSeg').dataset.on=1; $('saSeg').addEventListener('click',e=>{ const b=e.target.closest('button[data-sa]'); if(b){ SA_DAYS=Number(b.dataset.sa); render($('day').value); } }); }
   }
 

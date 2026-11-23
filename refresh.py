@@ -460,7 +460,8 @@ def why(r):  # why a booking did not go ahead: Zoho's closure reason plus the st
 LIVE_KEYS = (("v", "Visit_Status"), ("vt", "Status_Updated_At"), ("vb", "Status_Updated_By"), ("eta", "Provider_ETA"),
              ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At"),
              ("cw", "Customer_Told_On_The_Way_At"),
-             ("cf", "Customer_Confirmed"), ("cr", "Customer_Rating"), ("cm", "Customer_Comment"))
+             ("cf", "Customer_Confirmed"), ("cr", "Customer_Rating"), ("cm", "Customer_Comment"),
+             ("lc", "Late_Credit_Amount"), ("lcx", "Late_Credit_Expires"))
 
 
 def fast():
@@ -614,7 +615,7 @@ def main():
 
     hist = customer_history(z, today)
     first = hist["first"]
-    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At, Customer_Confirmed, Customer_Rating, Customer_Comment"
+    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At, Customer_Confirmed, Customer_Rating, Customer_Comment, Late_Credit_Amount, Late_Credit_Expires"
 
     def owner(r):
         o = r.get("Pet_Owner")
@@ -751,8 +752,18 @@ def main():
         print("WARNING customer ratings could not be read:", str(e)[:120])
         ratings = None
 
+    # late-arrival credits given to customers automatically (SOP section 4: $20 off the next booking, valid 3 months), all time
+    try:
+        credits = [{"id": r.get("id"), "ref": r.get("Name"), "d": r.get("Date_Time"), "p": r.get("Partner_Name.Name"), "who": r.get("Pet_Owner.Name") or r.get("Customer_Clean_Name"),
+                    "amt": r.get("Late_Credit_Amount"), "at": r.get("Late_Credit_Given_At"), "x": r.get("Late_Credit_Expires"), "used": bool(r.get("Late_Credit_Used")),
+                    "dm": r.get("Delay_Minutes"), "why": r.get("Delay_Reason")}
+                   for r in slow("late_credits", 3600, lambda: z.all("select Name, Date_Time, Partner_Name.Name, Pet_Owner.Name, Customer_Clean_Name, Late_Credit_Amount, Late_Credit_Given_At, Late_Credit_Expires, Late_Credit_Used, Delay_Minutes, Delay_Reason from Booking where Late_Credit_Given_At is not null"))]
+    except SystemExit as e:
+        print("WARNING late credits could not be read:", str(e)[:120])
+        credits = None
+
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)
