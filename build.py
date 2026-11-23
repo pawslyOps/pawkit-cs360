@@ -133,6 +133,7 @@ def main():
         "app_orders": raw.get("app_orders", []),
         "items": raw.get("items", []),
         "inv": raw.get("inv", []),
+        "ratings": raw.get("ratings"),
         "config": {k: v for k, v in cfg.items() if not k.startswith("_")},
         "payboy_synced": pb.get("synced"),
         "leave_bal": leave_bal,

@@ -742,8 +742,17 @@ def main():
         print("WARNING leave balances could not be read:", str(e)[:120])
         bal = None
 
+    # every booking that was sent the customer survey (completion check + star rating), all time: the Service Satisfaction page
+    try:
+        ratings = [{"id": r.get("id"), "ref": r.get("Name"), "d": r.get("Date_Time"), "p": r.get("Partner_Name.Name"), "cat": r.get("Service_Category"),
+                    "at": r.get("Survey_Sent_At"), "cf": r.get("Customer_Confirmed"), "cr": r.get("Customer_Rating"), "cm": r.get("Customer_Comment")}
+                   for r in slow("ratings", 3600, lambda: z.all("select Name, Date_Time, Partner_Name.Name, Service_Category, Survey_Sent_At, Customer_Confirmed, Customer_Rating, Customer_Comment from Booking where Survey_Sent_At is not null"))]
+    except SystemExit as e:
+        print("WARNING customer ratings could not be read:", str(e)[:120])
+        ratings = None
+
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)
