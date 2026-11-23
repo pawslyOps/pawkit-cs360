@@ -459,7 +459,8 @@ def why(r):  # why a booking did not go ahead: Zoho's closure reason plus the st
 # Booking fields the Live Status tab needs, and their short keys in the published visit records
 LIVE_KEYS = (("v", "Visit_Status"), ("vt", "Status_Updated_At"), ("vb", "Status_Updated_By"), ("eta", "Provider_ETA"),
              ("dl", "Delay_Reason"), ("dm", "Delay_Minutes"), ("ve", "Visit_End_Reason"), ("ct", "Customer_Told_Of_Delay_At"),
-             ("cw", "Customer_Told_On_The_Way_At"))
+             ("cw", "Customer_Told_On_The_Way_At"),
+             ("cf", "Customer_Confirmed"), ("cr", "Customer_Rating"), ("cm", "Customer_Comment"))
 
 
 def fast():
@@ -613,7 +614,7 @@ def main():
 
     hist = customer_history(z, today)
     first = hist["first"]
-    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At"
+    F = "Created_Time, Date_Time, End_Time, Booking_Status, Service_Category, Created_By, Partner_Name.Name, Area, Invoice_Status, Payment_Method, Base_Price, Pet_Owner, Reason_Not_Fulfilled, Reason, Reason_Note, Note, Booking_Code, Name, Reminder_Provider_Sent, Reminder_Owner_Sent, Visit_Status, Status_Updated_At, Status_Updated_By, Provider_ETA, Delay_Reason, Delay_Minutes, Visit_End_Reason, Customer_Told_Of_Delay_At, Customer_Told_On_The_Way_At, Customer_Confirmed, Customer_Rating, Customer_Comment"
 
     def owner(r):
         o = r.get("Pet_Owner")

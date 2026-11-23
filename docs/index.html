@@ -1372,7 +1372,10 @@ function render(day){
       if(g==='Confirmed'&&isT&&left<=45) return ['warn',(left>=0?'Starts in '+left+' min':'Start time passed')+': check the provider is on the way'];
       if(r.v&&r.ve&&['Cancelled','Needs reschedule'].includes(r.v)) return ['warn',r.v+' by the provider ('+r.ve+'): update Booking Status and contact the customer'];
       if(g==='Awaiting provider') return ['bad',(r.p?'Waiting on '+(/Owner/.test(r.s||'')?'the customer':'the time slot'):'No provider on the booking')+': settle it in Zoho'];
-      if(g==='Not closed') return ['warn',(r.v==='Completed'?'Provider marked it completed':'Past its end time and still Scheduled')+': close it in Zoho'];
+      const sv=r.cr?'customer rated it '+r.cr+'/5'+(r.cm?' · “'+r.cm+'”':''):(r.cf==='Yes'?'customer confirmed it was completed':'');
+      if(r.cf==='No') return ['bad','Customer says the service was NOT completed: contact the customer now'];
+      if(g==='Not closed') return [r.cr&&r.cr<=3?'bad':'warn',[(r.v==='Completed'?'Provider marked it completed':'Past its end time and still Scheduled')+': close it in Zoho',sv].filter(Boolean).join(' · ')];
+      if(g==='Completed'&&sv) return [r.cr&&r.cr<=3?'warn':'',sv.charAt(0).toUpperCase()+sv.slice(1)];
       if(g==='Scheduled'&&isT&&left<=45) return ['warn','Starts in '+left+' min: check the provider is on the way'];
       if(g==='Scheduled'&&isT&&left<=90) return ['','Starts in '+left+' min'];
       if(g==='Scheduled'&&!r.rp) return ['','Provider reminder not sent yet'];
