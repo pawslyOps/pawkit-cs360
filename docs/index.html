@@ -1157,6 +1157,7 @@ function hoursText(code){const h=shiftHours(code);return h.length?h.map(([a,b])=
 function onAt(code,min){return shiftHours(code).some(([a,b])=>min>=toMin(a)&&min<toMin(b));}
 
 function render(day){
+  try{ csBarSync(); }catch(e){}   // the date bar follows the day the page now shows (it was filled once on open, before the day was set, so it showed an old date)
   const now=sgNow(); const isToday=day===now.day;
   const roster=CFG.roster[day]||null;
   const wa=D.wa[day]||{in:0,out:0,chats:0};
