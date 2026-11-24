@@ -876,7 +876,7 @@ const cnt=(arr,f)=>{const o={};arr.forEach(x=>{const k=f(x);o[k]=(o[k]||0)+1;});
 
 let D, CFG;
 // ---------- time off decision, opened from the buttons in the approver's email ----------
-// Link form: #td/<request id>/<A|R>/<approval key>/<name>/<type>/<from>/<to> (the last four are for the email
+// Link form: #td/<request id>/<A|R>/<approval key>/<name>/<type>/<from>/<to>?n=<request name> (the last five are for the email
 // that tells the team member the outcome). Nothing is sent until the button on this page is pressed.
 let DECIDE=null;
 (function(){
@@ -889,15 +889,16 @@ let DECIDE=null;
     body.innerHTML='<h1>'+(d==='Approved'?'Approved. Thank you.':d==='Rejected'?'Rejected. Thank you.':'Your decision is recorded.')+'</h1><p>The dashboard and the schedule update within a few minutes. You can close this page.</p>'+closeBtn; wire(); return;
   }
   if(!h.startsWith('#td/')) return;
-  const [id,dc,key,...rest]=h.slice(4).split('/'); box.style.display='flex';
+  const qi=h.indexOf('?'), hq=qi<0?'':h.slice(qi+1).replace(/^n=/,''); const [id,dc,key,...rest]=(qi<0?h:h.slice(0,qi)).slice(4).split('/'); box.style.display='flex';
   const dq=x=>{try{return decodeURIComponent(x).replace(/\+/g,' ').trim()}catch(e){return ''}};
   const who=dq(rest[0]||''), typ=dq(rest[1]||''), ds=rest.slice(2), half=Math.ceil(ds.length/2);   // dates may themselves contain slashes
   const dfrom=dq(ds.slice(0,half).join('/')), dto=dq(ds.slice(half).join('/'));
+  const hm=/\(half day(?:, (morning off|afternoon off))?\)/i.exec(dq(hq)), hpart=hm?'half day'+(hm[1]?' ('+hm[1].toLowerCase()+')':''):'';   // the request name carries the half-day words
   try{history.replaceState(null,'','#td')}catch(e){}            // keep the key out of the address bar and history
   if(!/^\d{8,25}$/.test(id||'')||!/^[AR]$/.test(dc||'')||!/^[\w-]{16,80}$/.test(key||'')){
     body.innerHTML='<h1>This link did not come through properly</h1><p>Please try the button in the email again, or ask Vince to record your decision.</p>'+closeBtn; wire(); return;
   }
-  DECIDE={id,d:dc==='A'?'Approved':'Rejected',key,who:(who||'').slice(0,60),sum:[typ,dfrom&&dto&&dfrom!==dto?dfrom+' to '+dto:dfrom].filter(Boolean).join(', ').slice(0,200)};
+  DECIDE={id,d:dc==='A'?'Approved':'Rejected',key,who:(who||'').slice(0,60),sum:[typ,dfrom&&dto&&dfrom!==dto?dfrom+' to '+dto:dfrom,hpart].filter(Boolean).join(', ').slice(0,200)};
   const draw=()=>{ const ap=DECIDE.d==='Approved';
     body.innerHTML='<h1>'+(ap?'Approve':'Reject')+' this time off request?</h1><div class="who" id="dcWho" style="'+(DECIDE.who?'':'display:none')+'">'+(DECIDE.who?'<b>'+esc(DECIDE.who)+'</b>'+(DECIDE.sum?' · '+esc(DECIDE.sum):''):'')+'</div><p>Press the button to confirm. Nothing else to fill in. The team member is emailed the outcome.</p>'+
       '<button type="button" id="dcGo" class="'+(ap?'yes':'no')+'">'+(ap?'Yes, approve':'Yes, reject')+'</button><button type="button" id="dcSwap" class="alt">'+(ap?'Reject instead':'Approve instead')+'</button>';
@@ -1002,7 +1003,7 @@ function decideDetails(){
   const el=$('dcWho'); if(!el||!DECIDE||typeof D==='undefined'||!D||!D.leave) return;
   const l=D.leave.find(x=>x.id===DECIDE.id); if(!l) return;
   el.style.display='block';
-  el.innerHTML='<b>'+esc(l.name||'')+'</b> · '+esc(l.type||'')+docPill(l)+'<br>'+esc(l.from===l.to||!l.to?fmtDay(l.from):fmtDay(l.from)+' to '+fmtDay(l.to))+(l.status!=='Pending'?'<br>Already '+esc(String(l.status).toLowerCase())+(l.by?' by '+esc(l.by):'')+'. Confirming again replaces an email decision.':'');
+  el.innerHTML='<b>'+esc(l.name||'')+'</b> · '+esc(l.type||'')+docPill(l)+'<br>'+esc(l.from===l.to||!l.to?fmtDay(l.from):fmtDay(l.from)+' to '+fmtDay(l.to))+(isHalf(l)?' · half day'+(typeof l.half==='string'?', '+esc(l.half):''):'')+(l.status!=='Pending'?'<br>Already '+esc(String(l.status).toLowerCase())+(l.by?' by '+esc(l.by):'')+'. Confirming again replaces an email decision.':'');
 }
 
 function init(data){
