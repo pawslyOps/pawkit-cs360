@@ -1143,8 +1143,9 @@ async function pullLiveOnce(){
 }
 
 // approved time off replaces the shift code on the schedule for those days
+const isHalf=l=>/^half day/i.test(l.note||'')&&(l.to||l.from)===l.from;   // a one-day request whose note starts "Half day": the person still works the hours in the schedule
 function applyLeave(){
-  (D.leave||[]).filter(l=>l.status==='Approved'&&l.name&&l.from).forEach(l=>{
+  (D.leave||[]).filter(l=>l.status==='Approved'&&l.name&&l.from&&!isHalf(l)).forEach(l=>{
     for(let d=l.from, n=0; d<=(l.to||l.from)&&n<120; d=addDays(d,1), n++){ const r=CFG.roster&&CFG.roster[d]; if(r&&(l.name in r)) r[l.name]=/^(Sick|Outpatient|Hospitali[sz]ation)/i.test(l.type||'')?'SICK':'LEAVE'; }
   });
 }
@@ -1370,13 +1371,13 @@ function render(day){
     const lv=(D.leave||[]).filter(l=>l.status==='Approved'&&l.name&&l.from);
     const pend=(D.leave||[]).filter(l=>l.status==='Pending'&&l.name&&l.from), hit=(L,n,d)=>L.find(l=>l.name===n&&d>=l.from&&d<=(l.to||l.from)), kind=l=>/^(Sick|Outpatient|Hospitali[sz]ation)/i.test(l.type||'')?'SICK':'LEAVE';
     const cell=(n,d)=>{ const c=(CFG.roster[d]||{})[n]; if(c==='LEAVE'||c==='SICK') return c;
-      const a=hit(lv,n,d); if(a) return kind(a);
+      const a=hit(lv,n,d); if(a) return kind(a)+(isHalf(a)?'½':'');
       if(c==='OFF') return c;                              // already a rest day: no time off needed
       const q=hit(pend,n,d); return q?kind(q)+'?':''; };   // asked for, not decided yet
     const rowsOff=CFG.people.map(p=>({n:p.name,p,c:wd.map(d=>cell(p.name,d))})), any=rowsOff.some(r=>r.c.some(Boolean));
     $('offSub').textContent=(sched?'Rest days from the schedule tracker, with time off added.':'Rest days for this week are not in the schedule tracker yet, so this shows time off only.'+(any?'':' Nobody has time off approved or pending this week.'))+' Requests still waiting for approval are marked pending.';
     $('offWeek').innerHTML='<tr><th>Name</th>'+wd.map(d=>`<th>${esc(fmtDay(d))}</th>`).join('')+'</tr>'+
-      rowsOff.map(r=>'<tr><td>'+esc(r.n)+'</td>'+r.c.map(c=>{const pd=c.endsWith('?'), k=pd?c.slice(0,-1):c; return `<td>${c?`<span class="pill ${k==='OFF'?'':pd?'':'warn'}"${pd?' style="border:1px dashed var(--warn);background:transparent" title="Waiting for approval"':''}>${esc(codeLabel(k,r.p)+(pd?' · pending':''))}</span>`:''}</td>`;}).join('')+'</tr>').join('');
+      rowsOff.map(r=>'<tr><td>'+esc(r.n)+'</td>'+r.c.map(c=>{const pd=c.endsWith('?'), hf=c.endsWith('½'), k=pd||hf?c.slice(0,-1):c; return `<td>${c?`<span class="pill ${k==='OFF'?'':pd?'':'warn'}"${pd?' style="border:1px dashed var(--warn);background:transparent" title="Waiting for approval"':''}>${esc(codeLabel(k,r.p)+(hf?' · half day':'')+(pd?' · pending':''))}</span>`:''}</td>`;}).join('')+'</tr>').join('');
     if(!$('offSel').dataset.on){ $('offSel').dataset.on=1; const go=w=>{OFF_WK=w; render($('day').value);};
       $('offSel').addEventListener('change',e=>go(e.target.value));
       $('offPrev').addEventListener('click',()=>{const o=[...$('offSel').options].map(x=>x.value);go(o[Math.max(0,o.indexOf(OFF_WK)-1)]);});

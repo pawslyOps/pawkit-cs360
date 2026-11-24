@@ -55,6 +55,9 @@ def leave_balances(raw, cfg):
         for l in reqs:
             if l.get("name") == r["name"] and l.get("type") == r["type"] and (l.get("to") or l.get("from") or "") >= start:
                 n = days(r["name"], max(l.get("from") or start, start), l.get("to") or l.get("from"))
+                # a one-day request whose note starts "Half day" uses half a day of credit
+                if n == 1 and (l.get("note") or "").strip().lower().startswith("half day"):
+                    n = 0.5
                 if l["status"] == "Approved":
                     used += n
                 else:
