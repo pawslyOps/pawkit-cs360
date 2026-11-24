@@ -675,16 +675,21 @@ def main():
               "up": i.get("Unit_Price"), "cp": i.get("Cost_Price"), "sync": i.get("Last_Synced")}
              for i in slow("xero_items", 3600, lambda: z.all("select Name, Item_Code, Qty_On_Hand, Reserved_Qty, Unit_Price, Cost_Price, Last_Synced from Xero_Items where id is not null"))]
 
+    def half_of(r):
+        # a half-day request made on the page carries "(half day, morning off)" or "(half day, afternoon off)" in its record name
+        m = re.search(r"\(half day(?:, (morning off|afternoon off))?\)", r.get("Name") or "", re.I)
+        return (m.group(1) or True) if m and (r.get("To_Date") or r.get("From_Date")) == r.get("From_Date") else None
+
     # time off requests (custom module Leave_Requests, shown in Zoho as "Time Off Requests"; the reason stays in Zoho, it is not published)
     try:
-        lv = z.all("select Team_Member, Leave_Type, From_Date, To_Date, Cover_Arranged, Leave_Status, Decision_Note, Created_Time, Modified_By, Modified_Time from Leave_Requests where id is not null")
+        lv = z.all("select Name, Team_Member, Leave_Type, From_Date, To_Date, Cover_Arranged, Leave_Status, Decision_Note, Created_Time, Modified_By, Modified_Time from Leave_Requests where id is not null")
     except SystemExit as e:
         print("WARNING leave requests could not be read:", str(e)[:120])
         lv = None
     leave = None if lv is None else [{"id": r.get("id"), "name": r.get("Team_Member"), "type": r.get("Leave_Type"), "from": r.get("From_Date"), "to": r.get("To_Date") or r.get("From_Date"),
               "cover": r.get("Cover_Arranged"), "status": r.get("Leave_Status") or "Pending", "note": r.get("Decision_Note"),
               "asked": r.get("Created_Time"), "by": nm(r.get("Modified_By")) if (r.get("Leave_Status") in ("Approved", "Rejected")) else None,
-              "when": r.get("Modified_Time")} for r in lv]
+              "when": r.get("Modified_Time"), "half": half_of(r)} for r in lv]
 
     # sick leave needs a medical document: is a file attached to the request? (a found file is remembered)
     if leave:

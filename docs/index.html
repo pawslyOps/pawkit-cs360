@@ -753,6 +753,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
           <label class="wide">Who<select name="COBJ24CF1" id="lvWho" required><option value="">Choose your name</option></select></label>
           <label>From<input type="date" id="lvFrom" required></label>
           <label>To<input type="date" id="lvTo" required></label>
+          <label class="wide">How long<select id="lvPart"><option value="">Full day or days</option><option value="morning off">Half day, morning off (work the afternoon)</option><option value="afternoon off">Half day, afternoon off (work the morning)</option></select></label>
           <label>Type<select name="COBJ24CF2" id="lvType" required><option>Annual leave</option><option>Sick leave</option><option>Pet care leave</option><option>Childcare leave</option><option>Time off in lieu</option><option>Unpaid leave</option><option>Other</option></select></label>
           <div class="lvcredit"><span class="lbl">Leave credit</span><div id="lvBalWho" class="credit muted">Choose your name</div></div>
           <label class="wide">Reason (only managers see this, in Zoho)<input type="text" name="COBJ24CF3" maxlength="250"></label>
@@ -811,12 +812,12 @@ const LV_TRACKED=['Annual leave','Sick leave','Pet care leave','Childcare leave'
 const fmtD=n=>{n=Math.round(n*100)/100; return n+(n===1?' day':' days');};
 function lvDays(w,f,t){ let n=0; if(!f) return 0; for(let d=dparts(f), end=dparts(t&&t>=f?t:f); d<=end; d=new Date(d.getTime()+864e5)){ if(((CFG.roster||{})[d.toISOString().slice(0,10)]||{})[w]!=='OFF') n++; } return n; }   // rest days in the schedule don't count
 function lvCredit(w,type){ const P=D&&D.leave_bal&&D.leave_bal.people&&D.leave_bal.people[w]; if(!P||!LV_TRACKED.includes(type)) return null; return P.find(x=>x.type===type)||{type,left:0,of:0,held:0,none:true}; }
-function balCheck(w,type,f,t){
+function balCheck(w,type,f,t,half){
   const b=lvCredit(w,type); if(!b) return '';   // no credits set up for this person yet, or a type that isn't counted
   const label=type.toLowerCase(), avail=b.left-(b.held||0);
   if(b.none) return 'You have no '+label+' credit, so this request can\'t be sent. Choose another type, or talk to Vince.';
   if(avail<=0) return 'You have no '+label+' left'+(b.held?' ('+fmtD(b.held)+' is waiting for approval)':'')+'. This request can\'t be sent.';
-  const n=lvDays(w,f,t); if(n>avail) return 'Not enough '+label+' left: you asked for '+fmtD(n)+' but have '+fmtD(avail)+' left.';
+  const n=half?Math.min(.5,lvDays(w,f,f)):lvDays(w,f,t); if(n>avail) return 'Not enough '+label+' left: you asked for '+fmtD(n)+' but have '+fmtD(avail)+' left.';
   return '';
 }
 const store={get(){try{return localStorage.getItem(KEY)}catch(e){return null}},set(v){try{localStorage.setItem(KEY,v)}catch(e){}},del(){try{localStorage.removeItem(KEY)}catch(e){}}};
@@ -1048,13 +1049,13 @@ function init(data){
   $('xSearch').addEventListener('input',renderStock); $('cpSearch').addEventListener('input',renderComplaints);
   const lvSick=()=>{ const s=$('lvType').value==='Sick leave'; $('lvDocWrap').style.display=s?'flex':'none'; $('lvDoc').disabled=!s; $('lvDoc').required=s; if(!s) $('lvDoc').value=''; };
   $('lvType').addEventListener('change',lvSick); lvSick();
-  $('lvForm').addEventListener('submit',e=>{ const f=$('lvFrom').value, t=$('lvTo').value||f, w=$('lvWho').value, err=$('lvErr'); err.textContent='';
+  $('lvForm').addEventListener('submit',e=>{ const part=$('lvPart').value, f=$('lvFrom').value, t=part?f:($('lvTo').value||f), w=$('lvWho').value, err=$('lvErr'); err.textContent='';
     if(!w||!f){ e.preventDefault(); err.textContent='Choose your name and the dates.'; return; }
     if(t<f){ e.preventDefault(); err.textContent='The last day is before the first day.'; return; }
-    { const bm=balCheck(w,$('lvType').value,f,t); if(bm){ e.preventDefault(); err.textContent=bm; return; } }
+    { const bm=balCheck(w,$('lvType').value,f,t,part); if(bm){ e.preventDefault(); err.textContent=bm; return; } }
     if($('lvType').value==='Sick leave'){ const fl=$('lvDoc').files[0]; if(!fl){ e.preventDefault(); err.textContent='Attach the medical document (a photo or PDF) for sick leave.'; return; } if(fl.size>10*1024*1024){ e.preventDefault(); err.textContent='That file is over 10 MB. Attach a smaller photo or PDF.'; return; } }
     const z=d=>{const x=dparts(d);return MON[x.getUTCMonth()]+' '+x.getUTCDate()+', '+x.getUTCFullYear();};
-    $('lvFromZ').value=z(f); $('lvToZ').value=z(t); $('lvName').value=(w+' - '+$('lvType').value+' - '+z(f)).slice(0,110); }); ['ctKind','ctMin'].forEach(i=>$(i).addEventListener('change',renderContacts)); $('ctSearch').addEventListener('input',renderContacts); document.querySelectorAll('#bkRange button').forEach(b=>b.addEventListener('click',()=>setRange(b.dataset.r))); $('bkDate').addEventListener('change',e=>{if(e.target.value){BK_DAY=e.target.value; renderBookings(BK_DAY);}}); $('bkPrev').addEventListener('click',()=>bkStep(-1)); $('bkNext').addEventListener('click',()=>bkStep(1)); $('bkToday').addEventListener('click',()=>{BK_DAY=sgNow().day; renderBookings(BK_DAY);}); $('tkSearch').addEventListener('input',renderBoard); $('tkOwner').addEventListener('change',renderBoard); $('cpFilter').addEventListener('change',()=>{renderComplaints(); document.querySelectorAll('#cpTiles .tile.click').forEach(x=>x.classList.toggle('on',x.dataset.f===$('cpFilter').value));}); $('xFilter').addEventListener('change',renderStock);
+    $('lvFromZ').value=z(f); $('lvToZ').value=z(t); $('lvName').value=(w+' - '+$('lvType').value+' - '+z(f)).slice(0,80)+(part?' (half day, '+part+')':''); });   // the half-day words in the record name are how the refresh knows ['ctKind','ctMin'].forEach(i=>$(i).addEventListener('change',renderContacts)); $('ctSearch').addEventListener('input',renderContacts); document.querySelectorAll('#bkRange button').forEach(b=>b.addEventListener('click',()=>setRange(b.dataset.r))); $('bkDate').addEventListener('change',e=>{if(e.target.value){BK_DAY=e.target.value; renderBookings(BK_DAY);}}); $('bkPrev').addEventListener('click',()=>bkStep(-1)); $('bkNext').addEventListener('click',()=>bkStep(1)); $('bkToday').addEventListener('click',()=>{BK_DAY=sgNow().day; renderBookings(BK_DAY);}); $('tkSearch').addEventListener('input',renderBoard); $('tkOwner').addEventListener('change',renderBoard); $('cpFilter').addEventListener('change',()=>{renderComplaints(); document.querySelectorAll('#cpTiles .tile.click').forEach(x=>x.classList.toggle('on',x.dataset.f===$('cpFilter').value));}); $('xFilter').addEventListener('change',renderStock);
   showUpdated();
   try{ render(sel.value); }
   finally{ pullLive(); setInterval(showUpdated,30*1000);
@@ -1143,7 +1144,7 @@ async function pullLiveOnce(){
 }
 
 // approved time off replaces the shift code on the schedule for those days
-const isHalf=l=>/^half day/i.test(l.note||'')&&(l.to||l.from)===l.from;   // a one-day request whose note starts "Half day": the person still works the hours in the schedule
+const isHalf=l=>(!!l.half||/^half day/i.test(l.note||''))&&(l.to||l.from)===l.from;   // a one-day request whose note starts "Half day": the person still works the hours in the schedule
 function applyLeave(){
   (D.leave||[]).filter(l=>l.status==='Approved'&&l.name&&l.from&&!isHalf(l)).forEach(l=>{
     for(let d=l.from, n=0; d<=(l.to||l.from)&&n<120; d=addDays(d,1), n++){ const r=CFG.roster&&CFG.roster[d]; if(r&&(l.name in r)) r[l.name]=/^(Sick|Outpatient|Hospitali[sz]ation)/i.test(l.type||'')?'SICK':'LEAVE'; }
@@ -1267,7 +1268,7 @@ function render(day){
   { const L=(D.leave||[]).slice(), td=now.day, link=id=>`<a href="https://crm.zoho.com/crm/org897178504/tab/CustomModule24/${encodeURIComponent(id||'')}" target="_blank" rel="noopener">Open in Zoho</a>`;
     const nd=l=>l.from&&l.to?Math.round((dparts(l.to)-dparts(l.from))/864e5)+1:1;
     const pend=L.filter(l=>l.status==='Pending'), appr=L.filter(l=>l.status==='Approved'), upc=appr.filter(l=>(l.to||l.from)>=td), onNow=appr.filter(l=>l.from<=td&&(l.to||l.from)>=td);
-    const rng=l=>esc(fmtDay(l.from))+(l.to&&l.to!==l.from?' to '+esc(fmtDay(l.to)):'')+' <span class="muted">('+(isHalf(l)?'half day':nd(l)+(nd(l)===1?' day':' days'))+')</span>';
+    const rng=l=>esc(fmtDay(l.from))+(l.to&&l.to!==l.from?' to '+esc(fmtDay(l.to)):'')+' <span class="muted">('+(isHalf(l)?'half day'+(typeof l.half==='string'?', '+esc(l.half):''):nd(l)+(nd(l)===1?' day':' days'))+')</span>';
     $('lvTiles').innerHTML=tile('Waiting for approval',pend.length,'Vince decides by email','lv:Pending')+tile('Off today, approved',onNow.length,onNow.map(l=>l.name).join(', ')||fmtDay(td),'lv:today')+tile('Approved, upcoming',upc.length,'today onwards','lv:upcoming')+tile('All requests',L.length,D.leave?'':'not loaded yet','lv:all');
     $('lvPending').innerHTML=pend.length?'<tr><th>Who</th><th>Type</th><th>Dates</th><th>Cover</th><th>Asked</th><th></th></tr>'+pend.sort((a,b)=>(a.from||'').localeCompare(b.from||'')).map(l=>`<tr><td>${esc(l.name||'Not chosen')}</td><td>${esc(l.type||'')}${docPill(l)}</td><td>${rng(l)}</td><td class="muted">${esc(l.cover||'')}</td><td class="muted">${l.asked?esc(fmtDay(dayOf(l.asked))):''}</td><td style="white-space:nowrap">${l.src?'<span class="muted">'+esc(l.src)+'</span>':link(l.id)}</td></tr>`).join(''):'<tr><td class="muted">Nothing waiting.</td></tr>';
     const k=(ACT_ON.lv||'lv:all').split(':')[1], V=k==='Pending'?pend:k==='today'?onNow:k==='upcoming'?upc:L;
@@ -1287,8 +1288,9 @@ function render(day){
       const avail=b.none?0:b.left-(b.held||0);
       box.innerHTML=b.none?'None for you':'<span><b>'+esc(fmtD(avail))+'</b> left'+(b.of!=null?' <span class="muted">of '+esc(b.of)+'</span>':'')+(b.held?' <span class="muted">· '+esc(fmtD(b.held))+' waiting for approval</span>':'')+'</span>';
       if(avail<=0) box.classList.add('bad'); };
-    const lbLive=()=>{ lbWho(); $('lvErr').textContent=$('lvWho').value?balCheck($('lvWho').value,$('lvType').value,$('lvFrom').value,$('lvTo').value||$('lvFrom').value):''; };
-    if(!$('lvWho').dataset.lb){ $('lvWho').dataset.lb=1; ['lvWho','lvType','lvFrom','lvTo'].forEach(i=>$(i).addEventListener('change',()=>lbLive())); } lbWho();
+    const lbLive=()=>{ lbWho(); $('lvErr').textContent=$('lvWho').value?balCheck($('lvWho').value,$('lvType').value,$('lvFrom').value,$('lvTo').value||$('lvFrom').value,$('lvPart').value):''; };
+    const partSync=()=>{ const h=!!$('lvPart').value, to=$('lvTo'); to.disabled=h; if(h) to.value=$('lvFrom').value; };
+    if(!$('lvWho').dataset.lb){ $('lvWho').dataset.lb=1; ['lvWho','lvType','lvFrom','lvTo','lvPart'].forEach(i=>$(i).addEventListener('change',()=>{partSync(); lbLive();})); } lbWho();
     const who=$('lvWho'); if(who.options.length<2) who.innerHTML='<option value="">Choose your name</option>'+CFG.people.filter(p=>!p.sched_only).map(p=>`<option>${esc(p.name)}</option>`).join('');
     if(!$('lvFrom').min){ $('lvFrom').min=addDays(td,-14); $('lvTo').min=addDays(td,-14); }
   }
