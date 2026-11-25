@@ -811,6 +811,8 @@ let PW=null;
 const LV_TRACKED=['Annual leave','Sick leave','Pet care leave','Childcare leave'];   // paid leave only: unpaid leave isn't shown or counted
 const fmtD=n=>{n=Math.round(n*100)/100; return n+(n===1?' day':' days');};
 function lvDays(w,f,t){ let n=0; if(!f) return 0; for(let d=dparts(f), end=dparts(t&&t>=f?t:f); d<=end; d=new Date(d.getTime()+864e5)){ if(((CFG.roster||{})[d.toISOString().slice(0,10)]||{})[w]!=='OFF') n++; } return n; }   // rest days in the schedule don't count
+// people marked leave_only (not CS or Ops agents) are on the time off form and the credits card, not on the schedule
+function normPeople(){ if(CFG&&CFG.people&&!CFG.people_all){ CFG.people_all=CFG.people; CFG.people=CFG.people.filter(p=>!p.leave_only); } }
 function lvCredit(w,type){ const P=D&&D.leave_bal&&D.leave_bal.people&&D.leave_bal.people[w]; if(!P||!LV_TRACKED.includes(type)) return null; return P.find(x=>x.type===type)||{type,left:0,of:0,held:0,none:true}; }
 function balCheck(w,type,f,t,half){
   const b=lvCredit(w,type); if(!b) return '';   // no credits set up for this person yet, or a type that isn't counted
@@ -1007,7 +1009,7 @@ function decideDetails(){
 }
 
 function init(data){
-  D=data; CFG=data.config; applyLeave(); decideDetails();
+  D=data; CFG=data.config; normPeople(); applyLeave(); decideDetails();
   const days=Object.keys(D.wa).sort();
   const today=sgNow().day;
   const sel=$('day');
@@ -1131,7 +1133,7 @@ async function pullLiveOnce(){
   if(N.generated<=D.generated){ MISSES++; return; }
   const prevD=D, prevC=CFG, sel=$('day'), cur=sel.value, prevHTML=sel.innerHTML, today=sgNow().day;
   try{
-    D=N; CFG=N.config; applyLeave();
+    D=N; CFG=N.config; normPeople(); applyLeave();
     const days=Object.keys(D.wa).sort();
     sel.innerHTML=days.slice().reverse().map(d=>`<option value="${d}">${fmtDay(d)}${d===today?' (today)':''}</option>`).join('');
     sel.value=(!USER_PICKED||!days.includes(cur))?(days.includes(today)?today:days[days.length-1]):cur;
@@ -1282,7 +1284,7 @@ function render(day){
     // ---- leave credits (Zoho Leave Balances minus time off asked on this page) ----
     const LB=D.leave_bal, LBP=(LB&&LB.people)||{};
     $('lbNote').innerHTML=LB?'Days left of the allowance for the year. Approved time off is taken off automatically; time off waiting for approval is shown as held. Credits are kept in Zoho (Leave Balances); to correct one, edit its Opening Balance and Opening Date there.':'Leave credits appear after the next data refresh.';
-    $('lvBal').innerHTML=LB?'<tr><th>Name</th>'+LV_TRACKED.map(t=>`<th>${esc(t.replace(/ leave$/,''))}</th>`).join('')+'</tr>'+CFG.people.filter(p=>!p.sched_only).map(p=>{const b=LBP[p.name];return '<tr><td>'+esc(p.name)+'</td>'+(b?LV_TRACKED.map(t=>{const x=b.find(y=>y.type===t);return '<td>'+(x?`<b>${esc(fmtD(x.left))}</b> <span class="muted">of ${esc(x.of)}</span>`+(x.held?` <span class="pill warn">${esc(fmtD(x.held))} held</span>`:''):'<span class="muted">–</span>')+'</td>';}).join(''):`<td class="muted" colspan="${LV_TRACKED.length}">No credits set up yet</td>`)+'</tr>';}).join(''):'';
+    $('lvBal').innerHTML=LB?'<tr><th>Name</th>'+LV_TRACKED.map(t=>`<th>${esc(t.replace(/ leave$/,''))}</th>`).join('')+'</tr>'+(CFG.people_all||CFG.people).filter(p=>!p.sched_only).map(p=>{const b=LBP[p.name];return '<tr><td>'+esc(p.name)+'</td>'+(b?LV_TRACKED.map(t=>{const x=b.find(y=>y.type===t);return '<td>'+(x?`<b>${esc(fmtD(x.left))}</b> <span class="muted">of ${esc(x.of)}</span>`+(x.held?` <span class="pill warn">${esc(fmtD(x.held))} held</span>`:''):'<span class="muted">–</span>')+'</td>';}).join(''):`<td class="muted" colspan="${LV_TRACKED.length}">No credits set up yet</td>`)+'</tr>';}).join(''):'';
     const lbWho=()=>{ const w=$('lvWho').value, ty=$('lvType').value, box=$('lvBalWho'); box.classList.remove('bad','muted');
       if(!w){ box.textContent='Choose your name'; box.classList.add('muted'); return; }
       const b=lvCredit(w,ty);
@@ -1293,7 +1295,7 @@ function render(day){
     const lbLive=()=>{ lbWho(); $('lvErr').textContent=$('lvWho').value?balCheck($('lvWho').value,$('lvType').value,$('lvFrom').value,$('lvTo').value||$('lvFrom').value,$('lvPart').value):''; };
     const partSync=()=>{ const h=!!$('lvPart').value, to=$('lvTo'); to.disabled=h; if(h) to.value=$('lvFrom').value; };
     if(!$('lvWho').dataset.lb){ $('lvWho').dataset.lb=1; ['lvWho','lvType','lvFrom','lvTo','lvPart'].forEach(i=>$(i).addEventListener('change',()=>{partSync(); lbLive();})); } lbWho();
-    const who=$('lvWho'); if(who.options.length<2) who.innerHTML='<option value="">Choose your name</option>'+CFG.people.filter(p=>!p.sched_only).map(p=>`<option>${esc(p.name)}</option>`).join('');
+    const who=$('lvWho'); if(who.options.length<2) who.innerHTML='<option value="">Choose your name</option>'+(CFG.people_all||CFG.people).filter(p=>!p.sched_only).map(p=>`<option>${esc(p.name)}</option>`).join('');
     if(!$('lvFrom').min){ $('lvFrom').min=addDays(td,-14); $('lvTo').min=addDays(td,-14); }
   }
 

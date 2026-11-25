@@ -732,7 +732,12 @@ def main():
         for d in sorted(dec, key=lambda d: d.get("Created_Time") or ""):
             l = byid.get((d.get("Request_ID") or "").strip())
             if l and d.get("Decision") in ("Approved", "Rejected") and hmac.compare_digest(str(d.get("Approval_Key") or ""), akey):
-                l.update(status=d["Decision"], by="%s (by email)" % (pc.get("_approver_own", "Charlene") if l["name"] == "Vince" else pc.get("_approver", "Approver")), when=d.get("Created_Time"))
+                l.update(status=d["Decision"], by="%s (by email)" % (pc.get("_approver_own", "Charlene") if l["name"] in (pc.get("_approver_own_names") or ["Vince"]) else pc.get("_approver", "Approver")), when=d.get("Created_Time"))
+
+        # people whose own requests need nobody's approval (private config _no_approval): recorded as approved
+        for l in leave:
+            if l["status"] == "Pending" and l["name"] in (pc.get("_no_approval") or []):
+                l.update(status="Approved", by="Own request, no approval needed", when=l.get("asked"))
 
     inv = [{"d": b.get("Date_Time"), "s": b.get("Booking_Status"), "inv": b.get("Invoice_Status"), "po": b.get("Paid_On"),
             "pm": b.get("Payment_Method"), "amt": b.get("Base_Price"), "cat": b.get("Service_Category")}
