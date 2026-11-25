@@ -134,6 +134,7 @@ def main():
         "tasks": raw.get("tasks", []),
         "orders": raw.get("orders", []),
         "app_orders": raw.get("app_orders", []),
+        "owners": raw.get("owners"),
         "items": raw.get("items", []),
         "inv": raw.get("inv", []),
         "ratings": raw.get("ratings"),
