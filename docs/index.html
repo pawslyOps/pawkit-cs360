@@ -757,7 +757,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     <div style="max-width:640px">
       <div class="card">
         <h2>Request time off</h2>
-        <p class="sub">This form is now the way to ask for time off (it replaces applying in Payboy). Vince gets an email and approves or rejects it from there; Charlene is copied on the outcome. Sick leave needs a medical document attached. After sending you go back to the Time Off page; the request shows there within a few minutes.</p>
+        <p class="sub">This form is now the way to ask for time off (it replaces applying in Payboy). Vince gets an email and approves or rejects it from there; Charlene is copied on the outcome. Sick leave needs the medical certificate (MC) attached; for other types a supporting document is optional. After sending you go back to the Time Off page; the request shows there within a few minutes.</p>
         <form id="lvForm" class="lvform" action="https://crm.zoho.com/crm/WebForm" method="POST" enctype="multipart/form-data" accept-charset="UTF-8">
           <input type="hidden" name="xnQsjsdp" value="ce0e4d8bcb6537f4b91217594d13e0966bdc3b9a7ec3779634f22cafc6a6fd28">
           <input type="hidden" name="zc_gad" value="">
@@ -776,7 +776,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
           <div class="lvcredit"><span class="lbl">Leave credit</span><div id="lvBalWho" class="credit muted">Choose your name</div></div>
           <label class="wide">Reason (only managers see this, in Zoho)<input type="text" name="COBJ24CF3" maxlength="250"></label>
           <label class="wide">Who covers (optional)<input type="text" name="COBJ24CF4" maxlength="110"></label>
-          <label class="wide" id="lvDocWrap" style="display:none">Medical document (required for sick leave; photo or PDF, up to 10 MB)<input type="file" name="theFile" id="lvDoc" accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.heic" disabled></label>
+          <label class="wide" id="lvDocWrap"><span id="lvDocLbl">Supporting document (optional; photo or PDF, up to 10 MB)</span><input type="file" name="theFile" id="lvDoc" accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.heic"></label>
           <button class="primary" type="submit">Send request</button>
           <div id="lvErr" role="alert" style="color:var(--bad);font-size:13px"></div>
         </form>
@@ -1068,13 +1068,13 @@ function init(data){
     const t=e.target.closest('.tile[data-act]'); if(t) tileAct(t.dataset.act); });
   $('app').addEventListener('keydown',e=>{ const t=e.target.closest&&e.target.closest('.tile[data-act]'); if(t&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); tileAct(t.dataset.act); } });
   $('xSearch').addEventListener('input',renderStock); $('cpSearch').addEventListener('input',renderComplaints);
-  const lvSick=()=>{ const s=$('lvType').value==='Sick leave'; $('lvDocWrap').style.display=s?'flex':'none'; $('lvDoc').disabled=!s; $('lvDoc').required=s; if(!s) $('lvDoc').value=''; };
+  const lvSick=()=>{ const s=$('lvType').value==='Sick leave'; $('lvDoc').required=s; $('lvDocLbl').textContent=s?'Medical certificate (MC) (required for sick leave; photo or PDF, up to 10 MB)':'Supporting document (optional; photo or PDF, up to 10 MB)'; };   /* the upload is offered for every type; only sick leave must have one */
   $('lvType').addEventListener('change',lvSick); lvSick();
   $('lvForm').addEventListener('submit',e=>{ const part=$('lvPart').value, f=$('lvFrom').value, t=part?f:($('lvTo').value||f), w=$('lvWho').value, err=$('lvErr'); err.textContent='';
     if(!w||!f){ e.preventDefault(); err.textContent='Choose your name and the dates.'; return; }
     if(t<f){ e.preventDefault(); err.textContent='The last day is before the first day.'; return; }
     { const bm=balCheck(w,$('lvType').value,f,t,part); if(bm){ e.preventDefault(); err.textContent=bm; return; } }
-    if($('lvType').value==='Sick leave'){ const fl=$('lvDoc').files[0]; if(!fl){ e.preventDefault(); err.textContent='Attach the medical document (a photo or PDF) for sick leave.'; return; } if(fl.size>10*1024*1024){ e.preventDefault(); err.textContent='That file is over 10 MB. Attach a smaller photo or PDF.'; return; } }
+    { const fl=$('lvDoc').files[0]; if(!fl&&$('lvType').value==='Sick leave'){ e.preventDefault(); err.textContent='Attach the medical certificate (MC), a photo or PDF, for sick leave.'; return; } if(fl&&fl.size>10*1024*1024){ e.preventDefault(); err.textContent='That file is over 10 MB. Attach a smaller photo or PDF.'; return; } }
     const z=d=>{const x=dparts(d);return MON[x.getUTCMonth()]+' '+x.getUTCDate()+', '+x.getUTCFullYear();};
     $('lvFromZ').value=z(f); $('lvToZ').value=z(t); $('lvName').value=(w+' - '+$('lvType').value+' - '+z(f)).slice(0,80)+(part?' (half day, '+part+')':''); });   /* the half-day words in the record name are how the refresh knows */ ['ctKind','ctMin'].forEach(i=>$(i).addEventListener('change',renderContacts)); $('ctSearch').addEventListener('input',renderContacts); document.querySelectorAll('#bkRange button').forEach(b=>b.addEventListener('click',()=>setRange(b.dataset.r))); $('bkDate').addEventListener('change',e=>{if(e.target.value){BK_DAY=e.target.value; renderBookings(BK_DAY);}}); $('bkPrev').addEventListener('click',()=>bkStep(-1)); $('bkNext').addEventListener('click',()=>bkStep(1)); $('bkToday').addEventListener('click',()=>{BK_DAY=sgNow().day; renderBookings(BK_DAY);}); $('tkSearch').addEventListener('input',renderBoard); $('tkOwner').addEventListener('change',renderBoard); $('cpFilter').addEventListener('change',()=>{renderComplaints(); document.querySelectorAll('#cpTiles .tile.click').forEach(x=>x.classList.toggle('on',x.dataset.f===$('cpFilter').value));}); $('xFilter').addEventListener('change',renderStock);
   showUpdated();
