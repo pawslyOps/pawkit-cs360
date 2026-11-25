@@ -580,7 +580,9 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
 
   <!-- SERVICE SATISFACTION -->
   <section data-panel="satisfaction">
-    <div class="rangebar"><div class="seg" role="group" aria-label="Period" id="saSeg"><button data-sa="30">Last 30 days</button><button data-sa="90">Last 90 days</button><button data-sa="0">All time</button></div><span id="saLabel" class="rangelabel"></span></div>
+    <div class="rangebar"><div class="seg" role="group" aria-label="Range" id="saRange"><button data-r="day">Day</button><button data-r="week">Week</button><button data-r="month">Month</button></div>
+      <div class="datepick"><button id="saPrev" aria-label="Previous" title="Previous">‹</button><input id="saDate" type="date" aria-label="Pick a date"><button id="saNext" aria-label="Next" title="Next">›</button><button id="saToday" class="todaybtn">Today</button></div>
+      <span id="saLabel" class="rangelabel"></span></div>
     <div class="tiles" id="saTiles"></div>
     <div class="card">
       <h2>How customers rated their visits</h2>
@@ -1089,7 +1091,7 @@ function showUpdated(){
   el.style.color=mins<=LV?'var(--good)':mins>60?'var(--warn)':'';
 }
 const ACT_ON={};
-let SA_DAYS=0;        // Service Satisfaction: days back, 0 = all time
+let SA_RANGE='month', SA_DAY=null;   // Service Satisfaction: same Day / Week / Month bar as Bookings (SA_DAY null = today)
 let PS_TOM=0;         // Provider Status: 0 = the day picked at the top, 1 = tomorrow
 let SCHED_WEEK=0;  // Week schedule: weeks before (-) or after (+) the week of the day picked at the top
 let SCHED_DAY=null;  // date clicked in the Week schedule: the Coverage card shows it (null = the day picked at the top)
@@ -1482,12 +1484,13 @@ function render(day){
   }
 
   // ---- service satisfaction: every customer answer to the after-visit survey ----
-  { const all=(D.ratings||D.visits.filter(r=>r.cf||r.cr)).map(r=>({...r,cr:r.cr==null||r.cr===''?null:Number(r.cr)})), from=SA_DAYS?addDays(now.day,-SA_DAYS):'';
-    const S=all.filter(r=>(dayOf(r.d)||'')>=from), R=S.filter(r=>r.cr), avg=l=>l.length?(l.reduce((a,r)=>a+r.cr,0)/l.length):null, f1=v=>v==null?'–':v.toFixed(1);
+  { const all=(D.ratings||D.visits.filter(r=>r.cf||r.cr)).map(r=>({...r,cr:r.cr==null||r.cr===''?null:Number(r.cr)})), saDay=SA_DAY||now.day, SR=spanOf(SA_RANGE,saDay), from=SR.from;
+    const S=all.filter(r=>{ const x=dayOf(r.d)||''; return x>=SR.from&&x<=SR.to; }), saMin=all.map(r=>dayOf(r.d)).filter(Boolean).sort()[0]||'', R=S.filter(r=>r.cr), avg=l=>l.length?(l.reduce((a,r)=>a+r.cr,0)/l.length):null, f1=v=>v==null?'–':v.toFixed(1);
     const low=R.filter(r=>r.cr<=3), notDone=S.filter(r=>r.cf==='No'), ans=S.filter(r=>r.cf||r.cr), pct=(a,b)=>b?Math.round(a/b*100)+'%':'–';
     const stars=n=>`<span style="color:var(--warn);letter-spacing:1px" aria-label="${n} of 5 stars">${'★'.repeat(n)}<span style="color:var(--line)">${'★'.repeat(5-n)}</span></span>`;
-    document.querySelectorAll('#saSeg button').forEach(b=>{ const on=Number(b.dataset.sa)===SA_DAYS; b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); });
-    $('saLabel').textContent=(SA_DAYS?'Visits from '+fmtDay(from)+' to today':'Every visit since the survey started')+(D.ratings?'':' · this month only until the next update');
+    document.querySelectorAll('#saRange button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===SA_RANGE)));
+    { const di=$('saDate'); di.min=saMin; di.max=now.day; di.value=saDay; $('saPrev').disabled=!!saMin&&SR.from<=saMin; $('saNext').disabled=SR.to>=now.day; }
+    $('saLabel').textContent=SR.label+(D.ratings?'':' · this month only until the next update');
     $('saTiles').innerHTML=tile('Service Satisfaction',R.length?f1(avg(R))+' / 5':'–',R.length?'average of '+R.length+' rating'+(R.length===1?'':'s'):'no ratings yet')
       +tile('Happy customers',pct(R.filter(r=>r.cr>=4).length,R.length),'rated 4 or 5 stars')
       +tile('Ratings received',R.length,D.ratings?pct(ans.length,S.length)+' of '+S.length+' customers asked replied':'')
@@ -1504,7 +1507,12 @@ function render(day){
     $('saAll').innerHTML=L.length?'<tr><th>Visit</th><th>Booking</th><th>Provider</th><th>Service</th><th>Completed?</th><th>Rating</th><th>What went wrong</th><th>Comment</th></tr>'+L.map(r=>`<tr><td style="white-space:nowrap">${esc(fmtDay(dayOf(r.d)))}</td><td>${recLink('booking',r.id,r.ref||'Booking')}</td><td>${esc(r.p||'')}</td><td>${esc(r.cat||'')}</td><td>${r.cf?`<span class="pill ${r.cf==='No'?'bad':'on'}">${esc(r.cf)}</span>`:''}</td><td style="white-space:nowrap">${r.cr?stars(r.cr)+' '+r.cr:'<span class="sub">no rating</span>'}</td><td>${r.dr?`<span class="pill bad">${esc(r.dr)}</span>`:''}</td><td>${esc(r.cm||'')}</td></tr>`).join(''):'<tr><td class="sub">No answers yet.</td></tr>';
     const CR=(D.credits||D.visits.filter(r=>r.lc).map(r=>({...r,amt:r.lc,x:r.lcx}))).slice().sort((a,b)=>(b.d||'').localeCompare(a.d||''));
     $('saCred').innerHTML=CR.length?'<tr><th>Visit</th><th>Booking</th><th>Customer</th><th>Provider</th><th>Late by</th><th class="num">Credit</th><th>Valid until</th><th>Status</th></tr>'+CR.map(r=>{ const st=r.used?['on','Used']:(r.x&&r.x<now.day?['','Expired']:['warn','To use']); return `<tr><td style="white-space:nowrap">${esc(fmtDay(dayOf(r.d)))}</td><td>${recLink('booking',r.id,r.ref||'Booking')}</td><td>${esc(r.who||'')}</td><td>${esc(r.p||'')}</td><td>${esc([r.dm?r.dm+' min':'',r.why||r.dl].filter(Boolean).join(' · '))}</td><td class="num">$${esc(r.amt)}</td><td style="white-space:nowrap">${esc(r.x?fmtDay(r.x):'')}</td><td><span class="pill ${st[0]}">${st[1]}</span></td></tr>`; }).join(''):'<tr><td class="sub">No late-arrival credits given yet.</td></tr>';
-    if(!$('saSeg').dataset.on){ $('saSeg').dataset.on=1; $('saSeg').addEventListener('click',e=>{ const b=e.target.closest('button[data-sa]'); if(b){ SA_DAYS=Number(b.dataset.sa); render($('day').value); } }); }
+    if(!$('saRange').dataset.on){ $('saRange').dataset.on=1; const go=()=>render($('day').value);
+      $('saRange').addEventListener('click',e=>{ const b=e.target.closest('button[data-r]'); if(b){ SA_RANGE=b.dataset.r; go(); } });
+      $('saPrev').addEventListener('click',()=>{ SA_DAY=stepDay(SA_RANGE,SA_DAY||sgNow().day,-1); go(); });
+      $('saNext').addEventListener('click',()=>{ const d=stepDay(SA_RANGE,SA_DAY||sgNow().day,1); SA_DAY=d>sgNow().day?null:d; go(); });
+      $('saToday').addEventListener('click',()=>{ SA_DAY=null; go(); });
+      $('saDate').addEventListener('change',e=>{ if(e.target.value){ SA_DAY=e.target.value; go(); } }); }
   }
 
   // ---- orders ----
@@ -1636,12 +1644,12 @@ let BK_RANGE='day'; try{BK_RANGE=localStorage.getItem('pawkit-cs360-bkrange')||'
 let BK_DAY=null, BK_VIEW='visits';
 function bkAnchor(){ return BK_DAY||$('day').value; }
 function setRange(r){ BK_RANGE=r; try{localStorage.setItem('pawkit-cs360-bkrange',r)}catch(e){} renderBookings(bkAnchor()); }
-function bkStep(dir){ const a=bkAnchor(); let d;
-  if(BK_RANGE==='day') d=addDays(a,dir); else if(BK_RANGE==='week') d=addDays(a,7*dir);
-  else { const x=dparts(a); d=new Date(Date.UTC(x.getUTCFullYear(),x.getUTCMonth()+dir,1)).toISOString().slice(0,10); }
-  BK_DAY=d; renderBookings(d); }
-function rangeFor(day){
-  const d=dparts(day);
+function stepDay(r,a,dir){ if(r==='day') return addDays(a,dir); if(r==='week') return addDays(a,7*dir);
+  const x=dparts(a); return new Date(Date.UTC(x.getUTCFullYear(),x.getUTCMonth()+dir,1)).toISOString().slice(0,10); }
+function bkStep(dir){ const d=stepDay(BK_RANGE,bkAnchor(),dir); BK_DAY=d; renderBookings(d); }
+function rangeFor(day){ return spanOf(BK_RANGE,day); }
+function spanOf(r,day){
+  const d=dparts(day), BK_RANGE=r;
   if(BK_RANGE==='week'){ const dow=(d.getUTCDay()+6)%7; const from=addDays(day,-dow); return {from,to:addDays(from,6),label:'Week of '+fmtDay(from)}; }
   if(BK_RANGE==='month'){ const from=day.slice(0,8)+'01'; const nd=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)); return {from,to:nd.toISOString().slice(0,10),label:['January','February','March','April','May','June','July','August','September','October','November','December'][d.getUTCMonth()]+' '+d.getUTCFullYear()}; }
   return {from:day,to:day,label:fmtDay(day)};
