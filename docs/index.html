@@ -1295,7 +1295,7 @@ function render(day){
     const lbLive=()=>{ lbWho(); $('lvErr').textContent=$('lvWho').value?balCheck($('lvWho').value,$('lvType').value,$('lvFrom').value,$('lvTo').value||$('lvFrom').value,$('lvPart').value):''; };
     const partSync=()=>{ const h=!!$('lvPart').value, to=$('lvTo'); to.disabled=h; if(h) to.value=$('lvFrom').value; };
     if(!$('lvWho').dataset.lb){ $('lvWho').dataset.lb=1; ['lvWho','lvType','lvFrom','lvTo','lvPart'].forEach(i=>$(i).addEventListener('change',()=>{partSync(); lbLive();})); } lbWho();
-    const who=$('lvWho'); if(who.options.length<2) who.innerHTML='<option value="">Choose your name</option>'+(CFG.people_all||CFG.people).filter(p=>!p.sched_only).map(p=>`<option>${esc(p.name)}</option>`).join('');
+    const who=$('lvWho'), whoL=(CFG.people_all||CFG.people).filter(p=>!p.sched_only); if(who.options.length!==whoL.length+1){ const cur=who.value; who.innerHTML='<option value="">Choose your name</option>'+whoL.map(p=>`<option>${esc(p.name)}</option>`).join(''); who.value=cur; }   // refilled when newer data brings a longer list
     if(!$('lvFrom').min){ $('lvFrom').min=addDays(td,-14); $('lvTo').min=addDays(td,-14); }
   }
 
