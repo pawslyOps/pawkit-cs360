@@ -467,6 +467,22 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <p class="sub" id="bySvcSub"></p>
       <div class="tablewrap"><table id="bySvc"></table></div>
     </div>
+    <div class="card" id="srcCard">
+      <h2>Where new pet owners come from</h2>
+      <p class="sub" id="srcSub"></p>
+      <div class="two" style="margin-top:10px">
+        <div>
+          <h3 style="margin:0 0 4px;font-size:14px">How they found us</h3>
+          <p class="sub" style="margin:0 0 8px">Google, social media and referrals, from the Source field of the Pet Owner record.</p>
+          <div class="tablewrap"><table id="srcFound"></table></div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 4px;font-size:14px">How they reached us</h3>
+          <p class="sub" style="margin:0 0 8px">Owners whose Source is the way the record was made (app, form, WhatsApp, typed in), not how they heard of Pawkit.</p>
+          <div class="tablewrap"><table id="srcVia"></table></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- WHATSAPP -->
@@ -1521,7 +1537,7 @@ function render(day){
   $('xPay').innerHTML='<tr><th>Payment method</th><th class="num">Visits</th><th class="num">Marked paid</th></tr>'+Object.keys(payC).sort((a,b)=>payC[b]-payC[a]).map(k=>`<tr><td>${esc(k)}</td><td class="num">${payC[k]}</td><td class="num">${payPaid[k]||0}</td></tr>`).join('');
   $('xStockSub').textContent='Xero Items in Zoho CRM, last synced '+(sync?fmtDay(dayOf(sync))+' '+t12(timeOf(sync)):'(unknown)')+'. Items at zero include services that carry no stock.';
   renderStock();
-  $('foot').textContent='Sources: Zoho CRM (Booking, Woztell logs, Complaints, Tasks, Order Processing, Xero Items, Time Off Requests) and the Pawkit CS Team Schedule Tracker. Times are Singapore time. Snapshot taken '+D.generated.replace('T',' ').slice(0,16)+' SGT.';
+  $('foot').textContent='Sources: Zoho CRM (Booking, Woztell logs, Complaints, Tasks, Order Processing, Xero Items, Time Off Requests, Pet Owner) and the Pawkit CS Team Schedule Tracker. Times are Singapore time. Snapshot taken '+D.generated.replace('T',' ').slice(0,16)+' SGT.';
 }
 
 
@@ -1727,7 +1743,36 @@ function renderBookings(day){
   $('bySvcSub').textContent='Visits in '+R.label+', and how many were completed.';
   const am={}; doneV.forEach(r=>{const k=r.cat||'No service'; am[k]=(am[k]||0)+(r.amt||0);});
   $('bySvc').innerHTML='<tr><th>Service</th><th class="num">Visits</th><th class="num">Completed</th><th class="num">Completed amount</th></tr>'+(Object.keys(sd).length?Object.keys(sd).sort((a,b)=>sd[b]-sd[a]).map(k=>`<tr><td>${esc(k)}</td><td class="num">${sd[k]}</td><td class="num">${cs[k]||0}</td><td class="num">${money0(am[k])}</td></tr>`).join('')+`<tr><th>Total</th><th class="num">${vis.length}</th><th class="num">${doneV.length}</th><th class="num">${money0(doneAmt)}</th></tr>`:'<tr><td colspan="4" class="muted">None.</td></tr>');
+  renderSources(R,inR,real,money0);
   renderContacts();
+}
+
+// Pet Owner Source holds two kinds of answer: how the record was made (these) and how the owner found Pawkit (everything else)
+const SRC_VIA=['App Booking','Website','WhatsApp','Cognito Forms','Manual Input','Email','Microchip Form','Euthanasia Form'];
+function renderSources(R,inR,real,money0){
+  const O=D.owners;
+  if(!O){ $('srcSub').textContent='This appears after the next data refresh.'; $('srcFound').innerHTML=$('srcVia').innerHTML=''; return; }
+  const via=CFG.source_via||SRC_VIA, isVia=s=>!s||via.includes(s);
+  const inRange=O.filter(o=>inR(dayOf(o.c))), found=inRange.filter(o=>!isVia(o.s)), reach=inRange.filter(o=>isVia(o.s));
+  // what each new owner booked afterwards: real bookings made on or after the day they were added (cancelled ones not counted)
+  const bk={}; D.created.filter(r=>r.o&&real(r)&&r.s!=='Cancelled').forEach(r=>(bk[r.o]=bk[r.o]||[]).push(r));
+  const after=o=>(bk[o.o]||[]).filter(r=>dayOf(r.c)>=dayOf(o.c));
+  const pct=(n,t)=>t?Math.round(n*100/t)+'%':'–';
+  const table=(rows,label,emptyTxt)=>{
+    const by={}; rows.forEach(o=>{const k=o.s||'No source'; (by[k]=by[k]||[]).push(o);});
+    const line=(k,g)=>{const b=g.filter(o=>after(o).length), amt=g.reduce((a,o)=>a+after(o).reduce((x,r)=>x+(r.amt||0),0),0);
+      return `<td class="num">${g.length}</td><td class="num">${pct(g.length,rows.length)}</td><td class="num">${b.length}</td><td class="num">${money0(amt)}</td>`;};
+    return `<tr><th>${label}</th><th class="num">Owners</th><th class="num">Share</th><th class="num">Booked</th><th class="num">Booking value</th></tr>`+
+      (rows.length?Object.keys(by).sort((a,b)=>by[b].length-by[a].length||a.localeCompare(b)).map(k=>`<tr><td>${esc(k)}</td>${line(k,by[k])}</tr>`).join('')+`<tr><th>Total</th>${line('',rows)}</tr>`
+        :`<tr><td colspan="5" class="muted">${emptyTxt}</td></tr>`);
+  };
+  const first=O.filter(o=>!isVia(o.s)).map(o=>dayOf(o.c)).sort()[0];
+  const top=Object.entries(cnt(found,o=>o.s)).sort((a,b)=>b[1]-a[1])[0];
+  $('srcSub').textContent=`${inRange.length} new pet owner${inRange.length===1?'':'s'} added in ${R.label}; ${found.length} (${pct(found.length,inRange.length)}) say how they found Pawkit`+
+    (top?`, most often ${top[0]} (${top[1]})`:'')+'. "Booked" counts owners with a real booking made since they were added, and "Booking value" adds up those bookings at base price (cancelled ones left out).'+
+    (first?` The first "how they found us" answer in this data is from ${fmtDay(first)}.`:'');
+  $('srcFound').innerHTML=table(found,'Source','No answers in this period yet.');
+  $('srcVia').innerHTML=table(reach,'Way in','None.');
 }
 
 function renderContacts(){

@@ -29,3 +29,11 @@ Anything already published under an old passcode stays readable with that passco
 - The page is titled Pawkit Ops360 (the address stays cs360.pawkit.sg). Schedule and Time Off are sub-tabs of one Workforce tab; `#schedule` and `#leave` still open them.
 - WhatsApp "Reply status right now": `refresh.py` reads the last 48 hours of WOZTELL logs, groups them by customer and publishes counts plus the waiting list (name, number, since when). No message text is published. Names missing from the log are looked up in the Customers module by mobile number.
 - Overview is four compact cards (Workforce, Customer Service, Services and Bookings, Orders and Inventory). Each number opens its tab. Quick links to Zoho and other tools come from `links` in the private config (so the addresses are only in the encrypted data); complaint numbers and task names link to their Zoho records.
+
+## Where new pet owners come from (Bookings tab)
+
+- `refresh.py` reads the Pet Owner module (`Customers_1`) once an hour for owners added since the start of the oldest month the Bookings tab can show: only the `Source` field, the created time and the last 7 characters of the record id (the same short id the bookings carry, so an owner's bookings can be matched). No name, number or email is published.
+- The Source picklist holds two kinds of answer. "How they reached us" is how the record was made: App Booking, Website, WhatsApp, Cognito Forms, Manual Input, Email, Microchip Form, Euthanasia Form, or blank. Everything else (Google Search, Google Ads, TikTok, Instagram, Facebook, referrals, Existing Customer, Other) counts as "How they found us". To change the first list without a code change, set `source_via` (a list of Source values) in the private config.
+- Two older picklist values come back from Zoho under their stored names and are shown as `Instagram` and `Facebook` (`Instagram Social`, `Facebook Social`). The `Ad Source` field is not used.
+- "Booked" counts owners with a real booking (not a new enquiry, not fulfilled or archived, not cancelled) made on or after the day they were added; "Booking value" adds up those bookings at base price. The card follows the Day / Week / Month bar.
+- Marketing answers started on 20 Nov 2026, so earlier periods show only "How they reached us".

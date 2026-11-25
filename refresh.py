@@ -517,6 +517,15 @@ def fast():
 SLOW = os.path.join(HERE, "raw", "slow_cache.json")
 
 
+# Pet Owner Source: two older picklist values come back from Zoho under their stored names
+SOURCE_NAMES = {"Instagram Social": "Instagram", "Facebook Social": "Facebook"}
+
+
+def owner_source(v):
+    v = " ".join(str(v or "").split())
+    return SOURCE_NAMES.get(v, v) or None
+
+
 def slow(name, ttl, fn):
     """Data that rarely changes (staff list, Xero stock, leave credits, app orders): read from Zoho at most once per
     ttl seconds; if a read fails, the last good copy is used."""
@@ -671,6 +680,15 @@ def main():
                    "pets": o.get("Number_of_Pets"), "who": o.get("Pet_Owner.Name") or o.get("Customer_Clean_Name")}
                   for o in slow("app_orders", 3600, lambda: z.all("select Name, Booking_Code, Created_Time, Date_Time, Booking_Status, Service_Category, Service_Breakdown, Pet_Owner.Name, Customer_Clean_Name, Partner_Name.Name, Invoice_Status, Payment_Method, Base_Price, Number_of_Pets from Booking where Booking_Code is not null"))]
 
+    # new pet owners and where they came from (Pet Owner field Source), read hourly, same window as the bookings.
+    # Published: the created time, the Source and the end of the owner id (to match the owner's bookings), no name or number.
+    try:
+        owners = [{"o": (r.get("id") or "")[-7:] or None, "c": r.get("Created_Time"), "s": owner_source(r.get("Source"))}
+                  for r in slow("owner_sources", 3600, lambda: z.all("select Source, Created_Time from Customers_1 where Created_Time >= '%sT00:00:00+08:00'" % start31))]
+    except SystemExit as e:
+        print("WARNING pet owner sources could not be read:", str(e)[:120])
+        owners = None
+
     items = [{"n": i.get("Name"), "code": i.get("Item_Code"), "q": i.get("Qty_On_Hand"), "r": i.get("Reserved_Qty"),
               "up": i.get("Unit_Price"), "cp": i.get("Cost_Price"), "sync": i.get("Last_Synced")}
              for i in slow("xero_items", 3600, lambda: z.all("select Name, Item_Code, Qty_On_Hand, Reserved_Qty, Unit_Price, Cost_Price, Last_Synced from Xero_Items where id is not null"))]
@@ -795,7 +813,7 @@ def main():
         print("WARNING notice read skipped:", str(e)[:120])
 
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice, "owners": owners}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)
