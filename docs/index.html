@@ -718,6 +718,12 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
 
   <!-- LEAVE -->
   <section data-panel="leave" id="timeoff">
+    <div class="card" id="lvCal" style="background:#fff9db;border-color:#f0e2a0">
+      <h2 style="font-weight:800">Leave Calendar</h2>
+      <div class="rangebar" style="margin:6px 0 8px"><div class="datepick"><button id="offPrev" aria-label="Previous week" title="Previous week">‹</button><select id="offSel" aria-label="Pick a week"></select><button id="offNext" aria-label="Next week" title="Next week">›</button><button id="offNow" class="todaybtn">This week</button></div></div>
+      <p class="sub" id="offSub"></p>
+      <div class="tablewrap"><table id="offWeek"></table></div>
+    </div>
     <div class="tiles" id="lvTiles"></div>
     <p style="margin:0 4px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="btnlink" href="#request">Request time off ›</a><span class="sub" style="margin:0">Opens the request form on its own page. Vince gets an email to approve or reject it.</span></p>
     <details class="card fold" id="lvVideo">
@@ -740,12 +746,6 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
       <h2>Leave credits</h2>
       <p class="sub" id="lbNote"></p>
       <div class="tablewrap"><table id="lvBal"></table></div>
-    </div>
-    <div class="card">
-      <h2>Rest days and time off</h2>
-      <div class="rangebar" style="margin:6px 0 8px"><div class="datepick"><button id="offPrev" aria-label="Previous week" title="Previous week">‹</button><select id="offSel" aria-label="Pick a week"></select><button id="offNext" aria-label="Next week" title="Next week">›</button><button id="offNow" class="todaybtn">This week</button></div></div>
-      <p class="sub" id="offSub"></p>
-      <div class="tablewrap"><table id="offWeek"></table></div>
     </div>
   </section>
 
@@ -1093,7 +1093,7 @@ let SA_DAYS=0;        // Service Satisfaction: days back, 0 = all time
 let PS_TOM=0;         // Provider Status: 0 = the day picked at the top, 1 = tomorrow
 let SCHED_WEEK=0;  // Week schedule: weeks before (-) or after (+) the week of the day picked at the top
 let SCHED_DAY=null;  // date clicked in the Week schedule: the Coverage card shows it (null = the day picked at the top)
-let OFF_WK=null;   // Monday of the week shown in Rest days and time off
+let OFF_WK=null;   // Monday of the week shown in the Leave Calendar (rest days and time off)
 let USER_PICKED=false, PULLING=false, MISSES=0, POLL_TIMER=null, LIVE_FAILED=false;
 async function getJSON(url,opts){
   const c=new AbortController(), t=setTimeout(()=>c.abort(),30000);
