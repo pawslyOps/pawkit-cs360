@@ -827,12 +827,27 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     </div>
   </section>
 
+  <!-- CS CONNECT (its own passcode; notes in csconnect.js, encrypted) -->
+  <section data-panel="csconnect">
+    <div class="card" id="ccGate">
+      <h2>CS Connect</h2>
+      <p class="sub">Notes and actions from the weekly CS meetings. This page has its own passcode.</p>
+      <form id="ccForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="ccPw" type="password" autocomplete="off" placeholder="CS Connect passcode" aria-label="CS Connect passcode" style="flex:1;min-width:200px">
+        <button type="submit">Open</button>
+      </form>
+      <p class="sub" id="ccErr" style="margin:8px 0 0"></p>
+    </div>
+    <div id="ccBody"></div>
+  </section>
+
   <footer id="foot"></footer>
  </div>
 </div>
 
 <div class="tip" id="tip"></div>
 <script src="data.js"></script>
+<script src="csconnect.js"></script>
 <script>
 (function(){
 const $=id=>document.getElementById(id);
@@ -882,7 +897,23 @@ async function open(pw,remember){
   try{ init(D); }catch(e){ console.error(e); const m=document.createElement('div'); m.className='flag bad'; m.style.margin='16px'; m.textContent='Something went wrong showing the page: '+e.message; document.body.prepend(m); }
 }
 $('gateForm').addEventListener('submit',e=>{e.preventDefault(); if(!SECURE) return; $('err').textContent='Opening…'; open($('pw').value.trim(),$('remember').checked);});
-$('lock').addEventListener('click',()=>{store.del(); location.reload();});
+$('lock').addEventListener('click',()=>{store.del(); try{sessionStorage.removeItem('cs360-ccpw')}catch(e){} location.reload();});
+// ---- CS Connect: meeting notes under their own passcode (kept for this browser tab only) ----
+function ccRender(N){
+  const ms=(N.meetings||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  $('ccGate').style.display='none';
+  $('ccBody').innerHTML=ms.length?ms.map(m=>`<div class="card"><h2>${esc(m.title)}, ${esc(fmtDay(m.date))}</h2><p class="sub">Attendees: ${esc(m.attendees)}</p>
+    <h2 style="font-size:14px;margin-top:10px">What we agreed</h2><ul style="margin:4px 0 12px;padding-left:20px">${(m.agreed||[]).map(([h,t])=>`<li style="margin:3px 0"><b>${esc(h)}:</b> ${esc(t)}</li>`).join('')}</ul>
+    <h2 style="font-size:14px">Actions</h2><div class="tablewrap"><table><tr><th>Action</th><th>Owner</th><th>Due</th></tr>${(m.actions||[]).map(([a,o,d])=>`<tr><td>${esc(a)}</td><td>${esc(o)}</td><td>${/agree/i.test(d)?`<span class="pill">${esc(d)}</span>`:`<span class="pill brand">${esc(d)}</span>`}</td></tr>`).join('')}</table></div>
+    ${m.next?`<p class="sub" style="margin:12px 0 0"><b>Next meeting:</b> ${esc(m.next)}</p>`:''}</div>`).join(''):'<div class="card"><p class="sub">No meeting notes yet.</p></div>';
+}
+async function ccOpen(pw,quiet){
+  if(!window.CS_CONNECT){ if(!quiet) $('ccErr').textContent='No CS Connect notes published yet.'; return; }
+  try{ ccRender(await decrypt(pw,window.CS_CONNECT)); try{sessionStorage.setItem('cs360-ccpw',pw)}catch(e){} }
+  catch(e){ try{sessionStorage.removeItem('cs360-ccpw')}catch(_){} if(!quiet) $('ccErr').textContent='That passcode did not work.'; }
+}
+$('ccForm').addEventListener('submit',e=>{ e.preventDefault(); $('ccErr').textContent='Opening…'; ccOpen($('ccPw').value.trim()); $('ccPw').value=''; });
+try{ const s=sessionStorage.getItem('cs360-ccpw'); if(s) ccOpen(s,true); }catch(e){}
 // Decryption needs a secure (https) page. On plain http, e.g. while a new address is still
 // waiting for its certificate, say so and move to https by itself as soon as it works.
 const SECURE=!!(window.isSecureContext && window.crypto && crypto.subtle);
@@ -1061,7 +1092,7 @@ function init(data){
   const TABS=[...document.querySelectorAll('#tabs button')];
   // Two main tabs are groups with sub-tabs. The old links (#schedule, #leave, #whatsapp, #tasks, #complaints)
   // open the matching sub-tab, and each group remembers the sub-tab last opened.
-  const GROUPS={workforce:[['schedule','Schedule'],['leave','Time Off']], service:[['whatsapp','WhatsApp Inquiries'],['tasks','Agent Tasks'],['complaints','Customer Complaints']], providers:[['provider','Live Status'],['satisfaction','Service Satisfaction'],['manual','Manual']]};
+  const GROUPS={workforce:[['schedule','Schedule'],['leave','Time Off']], service:[['whatsapp','WhatsApp Inquiries'],['tasks','Agent Tasks'],['complaints','Customer Complaints'],['csconnect','CS Connect']], providers:[['provider','Live Status'],['satisfaction','Service Satisfaction'],['manual','Manual']]};
   const SUB={workforce:'schedule',service:'whatsapp',providers:'provider'};
   const groupOf=p=>Object.keys(GROUPS).find(g=>GROUPS[g].some(x=>x[0]===p));
   const ALONE={request:'leave'};   // a page of its own that belongs under a sub-tab

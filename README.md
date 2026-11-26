@@ -37,3 +37,10 @@ Anything already published under an old passcode stays readable with that passco
 - Two older picklist values come back from Zoho under their stored names and are shown as `Instagram` and `Facebook` (`Instagram Social`, `Facebook Social`). The `Ad Source` field is not used.
 - "Booked" counts owners with a real booking (not a new enquiry, not fulfilled or archived, not cancelled) made on or after the day they were added; "Booking value" adds up those bookings at base price. The card follows the Day / Week / Month bar.
 - Marketing answers started on 20 Nov 2026, so earlier periods show only "How they reached us".
+
+## CS Connect (Customer Service > CS Connect)
+
+- Notes and actions from the weekly CS meetings, under their own passcode (separate from the team passcode).
+- The notes live only in `~/.config/pawkit-cs360/csconnect.json`; the passcode only in `~/.config/pawkit-cs360/csconnect-passcode`. Never commit either.
+- To publish or update: edit `csconnect.json` (newest meeting shown first), run `python3 -I csconnect.py`, then commit and push `docs/csconnect.js` on `main`.
+- The page keeps the CS Connect passcode for the browser tab only; Lock clears it.
