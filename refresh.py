@@ -126,7 +126,47 @@ URGENT_WORDS = ("urgent", "emergency", "asap", "immediately", "bleeding", "blood
                 "disappointed", "angry", "no show", "didn't come", "didnt come", "never came", "still waiting", "no reply", "no response")
 CLOSERS = {"ok", "okay", "okie", "k", "kk", "thanks", "thank", "you", "u", "so", "much", "very", "ty", "tq", "thx", "noted", "great", "sure",
            "alright", "got", "it", "will", "do", "no", "problem", "np", "yes", "yup", "yep", "ya", "yeah", "see", "bye", "welcome", "nice",
-           "good", "perfect", "cool", "and", "for", "the", "your", "help", "lah", "la", "have", "a", "day", "night", "appreciate", "appreciated"}
+           "good", "perfect", "cool", "and", "for", "the", "your", "help", "lah", "la", "have", "a", "day", "night", "appreciate", "appreciated",
+           "dokie", "worries", "youre", "you're", "re", "youb", "accommodating", "tks", "thankyou", "okk", "okok"}
+# same "no reply needed" rules as the hourly Zoho job wa_waiting_tasks (urgent-alert/wa_waiting_tasks.dg)
+AUTO_WORDS = ("parcel", "shopee", "spx", "ninja van", "ninjavan", "j&t", "lalamove", "grabexpress", "singpost", "qxpress", "otp",
+              "verification code", "one-time", "tracking number")
+SKIP_NUMBERS = {"639612931559", "14157959796"}   # Vince's test number, WOZTELL's own bot
+AGENT_FIRST = {"6947079000008272057": "Winchelle", "6947079000008272068": "Stephanie", "6947079000008272114": "Dimple",
+               "6947079000008272125": "Quynh", "6947079000025466018": "Vince"}
+WA_TASKS = os.path.join(HERE, "raw", "wa_tasks.json")
+
+
+def wa_tasks(z, now):
+    """WhatsApp reply tasks touched in the last 3 days, by the last 8 digits of the number: open ones (owner, id) and the
+    latest time a closed one was changed. Read at most every 3 minutes."""
+    try:
+        with open(WA_TASKS) as f:
+            c = json.load(f)
+        if time.time() - c.get("read", 0) < 180:
+            return c["m"]
+    except (OSError, ValueError, KeyError):
+        c = {}
+    try:
+        since = (now - timedelta(days=3)).isoformat(timespec="seconds")
+        rows = z.all("select id, Owner, Status, Mobile_Number, Modified_Time from Tasks where Subject like 'WhatsApp reply%%' and Modified_Time >= '%s'" % since)
+    except SystemExit as e:
+        print("WARNING WhatsApp reply tasks could not be read:", str(e)[:120])
+        return c.get("m") or {}
+    m = {}
+    for r in rows:
+        k = "".join(ch for ch in (r.get("Mobile_Number") or "") if ch.isdigit())[-8:]
+        if len(k) < 8:
+            continue
+        e = m.setdefault(k, {"open": None, "closed": ""})
+        if r.get("Status") not in ("Completed", "Cancelled"):
+            o = r.get("Owner") or {}
+            e["open"] = {"id": r.get("id"), "own": AGENT_FIRST.get(str(o.get("id")), o.get("name") or "")}
+        elif (r.get("Modified_Time") or "") > e["closed"]:
+            e["closed"] = r.get("Modified_Time") or ""
+    with open(WA_TASKS, "w") as f:
+        json.dump({"read": time.time(), "m": m}, f)
+    return m
 AUTO_TEXT = "thank you for contacting pawkit"   # WOZTELL's automatic greeting ("Hi there! Thank you for contacting Pawkit ...")
 
 
@@ -183,6 +223,8 @@ def whatsapp_status(z, now, rows=None):
             ignore = set(json.load(f).get("_wa_ignore_numbers") or [])
     except (OSError, ValueError):
         ignore = set()
+    ignore |= SKIP_NUMBERS
+    tmap = wa_tasks(z, now)
     conv = {}
     for r in sorted(rows, key=lambda r: r.get(W + "Message_Date_time") or ""):
         if (r.get(W + "From") if r.get(W + "Direction") == "In" else r.get(W + "To")) in ignore:
@@ -258,9 +300,19 @@ def whatsapp_status(z, now, rows=None):
         # a closing "thanks / ok / emoji" needs no reply
         def closer(p):
             words = [w for w in "".join(ch.lower() if ch.isalnum() or ch == "'" else " " for ch in p[2]).split()]
-            return p[1] in ("TEXT", "STICKER") and len(words) <= 6 and all(w in CLOSERS for w in words)
+            return p[1] == "STICKER" or (p[1] == "TEXT" and len(words) <= 8 and all(w in CLOSERS for w in words))
         while pend and closer(pend[-1]) and all(closer(p) for p in pend):
             pend = []
+        k8 = (c["tel"] or "")[-8:]
+        tk = tmap.get(k8) or {}
+        if pend:
+            ptxt = " ".join(p[2] for p in pend).lower()
+            if all(p[1] in ("PAYLOAD", "BUTTON", "INTERACTIVE") for p in pend):
+                pend = []        # only button taps on our reminders
+            elif any(w in ptxt for w in AUTO_WORDS) and not any(w in ptxt for w in URGENT_WORDS):
+                pend = []        # courier / OTP / automated notice
+            elif tk.get("closed") and not tk.get("open") and tk["closed"] > pend[0][0]:
+                pend = []        # its task was handled after the customer wrote
         if not pend:
             out["answered"] += 1
             seg["answered"] += 1
@@ -275,6 +327,21 @@ def whatsapp_status(z, now, rows=None):
                                    "urgent": bool(word) or mins >= URGENT_AFTER_MIN, "word": bool(word), "prov": bool(pname),
                                    "auto": c["auto_pend"],
                                    "msgs": [{"t": p[0], "x": p[2][:1200]} for p in pend[-8:]]})
+            # task column: the open task, or when the hourly job (09:45-20:45 at :45) or the 8:00 post will make one
+            if tk.get("open"):
+                out["waiting"][-1]["task"] = tk["open"]
+            elif not pname:
+                st = datetime.fromisoformat(pend[0][0]).astimezone(SGT)
+                due = st + timedelta(minutes=15 if word else 60)
+                day8 = now.replace(hour=8, minute=0, second=0, microsecond=0)
+                nxt = None
+                if st >= day8:
+                    for hh in range(9, 21):
+                        run = now.replace(hour=hh, minute=45, second=0, microsecond=0)
+                        if run >= due and run >= now - timedelta(minutes=4):
+                            nxt = "%02d:45" % hh
+                            break
+                out["waiting"][-1]["next"] = nxt or "8am"
             if pname:
                 out["waiting"][-1]["name"] = pname
         if c["last_in"] and c["last_in"][:10] == today and not pname:
