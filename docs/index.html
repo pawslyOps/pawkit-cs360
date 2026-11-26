@@ -952,14 +952,14 @@ const trkLink=id=>{ const u=(CFG&&CFG.links||{}).tracker, r=((D&&D.trk)||{})[id]
 const recLink=(kind,id,text)=>{ const b=((CFG&&CFG.links||{}).record||{})[kind]; return b&&id?`<a href="${esc(b+encodeURIComponent(id))}" target="_blank" rel="noopener" title="Open in Zoho">${esc(text)}</a>`:esc(text); };
 let WN_F='waiting', WN_SEG='cust', WN_ROWS=[];
 // ---- date filter for the Customer Service pages (each page remembers its own range) ----
-const CSF={whatsapp:{r:'day',d:null},tasks:{r:'all',d:null},complaints:{r:'all',d:null},orders:{r:'month',d:null},xero:{r:'all',d:null}};
-const CS_BY={whatsapp:'by message date',tasks:'tasks by due date',complaints:'by complaint date',orders:'by order date',xero:'invoices by visit date (stock is not dated)'};
+const CSF={overview:{r:'day',d:null},whatsapp:{r:'day',d:null},tasks:{r:'all',d:null},complaints:{r:'all',d:null},orders:{r:'month',d:null},xero:{r:'all',d:null}};
+const CS_BY={overview:'each figure by its own date · "now" figures are live',whatsapp:'by message date',tasks:'tasks by due date',complaints:'by complaint date',orders:'by order date',xero:'invoices by visit date (stock is not dated)'};
 let CUR_PANEL='overview';
 function rangeOf(r,day){ const d=dparts(day);
   if(r==='week'){ const dow=(d.getUTCDay()+6)%7, from=addDays(day,-dow); return {from,to:addDays(from,6),label:'Week of '+fmtDay(from)}; }
   if(r==='month'){ const from=day.slice(0,8)+'01', nd=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)); return {from,to:nd.toISOString().slice(0,10),label:['January','February','March','April','May','June','July','August','September','October','November','December'][d.getUTCMonth()]+' '+d.getUTCFullYear()}; }
   return {from:day,to:day,label:fmtDay(day)}; }
-function csR(p){ const f=CSF[p], day=f.d||(p==='whatsapp'&&$('day').value)||sgNow().day;
+function csR(p){ const f=CSF[p], day=f.d||((p==='whatsapp'||p==='overview')&&$('day').value)||sgNow().day;
   if(f.r==='all') return {all:true,label:'All dates',day,has:()=>true};
   const R=rangeOf(f.r,day); return {...R,all:false,day,has:x=>!!x&&x>=R.from&&x<=R.to}; }
 function csBarSync(){ const on=!!CSF[CUR_PANEL]; $('csBar').style.display=on?'':'none'; if(!on) return;
@@ -1080,7 +1080,9 @@ function init(data){
   const go=t=>{ location.hash='#'+t; showTab(t); window.scrollTo({top:0}); };
   const tileAct=act=>{ const [g,a,b]=act.split(':'), day=$('day').value;
     if(g==='go'){
-      if(a==='bookings'){ BK_VIEW=b; BK_DAY=null; BK_RANGE='day'; }
+      const fromOv=CUR_PANEL==='overview', ov=CSF.overview;   // carry the Overview date range to the page it opens
+      if(fromOv&&CSF[a]) CSF[a]={r:ov.r,d:ov.d};
+      if(a==='bookings'){ BK_VIEW=b; BK_DAY=fromOv&&ov.r!=='all'&&ov.d?ov.d:null; BK_RANGE=fromOv&&ov.r!=='all'?ov.r:'day'; }
       if(a==='complaints'){ $('cpFilter').value=b; }
       if(a==='tasks'){ TK_VIEW=b; }
       render(day); go(a); return; }
@@ -1218,8 +1220,9 @@ function render(day){
   const TEAMS=opsA.length?[['CS agents on',csA],['Ops agents on',opsA],['All agents on',agents]]:[['Human agents on',agents]];   // one count per team, then the total
   const split=fn=>opsA.length?' ('+csA.filter(fn).length+' CS, '+opsA.filter(fn).length+' Ops)':'';
 
-  // ---- flags ----
+  // ---- flags (for the day in the Overview date bar) ----
   const flags=[];
+  { const day=csR('overview').day, roster=CFG.roster[day]||null, isToday=day===now.day, vis=D.visits.filter(r=>dayOf(r.d)===day), vs=cnt(vis,r=>r.s||'No status');
   if(roster){
     const on=agents.filter(p=>shiftHours(roster[p.name]).length);
     if(on.length<=2) flags.push(['warn',`Only ${on.length} human agent${on.length===1?'':'s'} on shift on ${fmtDay(day)}.`]);
@@ -1236,55 +1239,75 @@ function render(day){
   { const np=(D.leave||[]).filter(l=>l.status==='Pending').length; if(np) flags.push(['warn',np+' time off request'+(np===1?'':'s')+' waiting for approval.']); }
   if(openComp.length) flags.push(['bad',`${openComp.length} complaint${openComp.length===1?'':'s'} not closed in Zoho CRM.`]);
   if((vs['To be Rescheduled']||0)+(vs['Pending Provider Time Slot']||0)+(vs['Pending Owner Confirmation']||0)) flags.push(['warn',`${(vs['To be Rescheduled']||0)+(vs['Pending Provider Time Slot']||0)+(vs['Pending Owner Confirmation']||0)} visit${vis.length===1?'':'s'} on this day still pending or to be rescheduled.`]);
+  }
   $('flags').innerHTML=flags.map(([k,t])=>`<div class="flag ${k}">${esc(t)}</div>`).join('');
 
-  // ---- overview: one compact card per area ----
-  const onCount=roster?agents.filter(p=>shiftHours(roster[p.name]).length).length:'–';
+  // ---- overview: one compact card per area. It has its own date bar (Day / Week / Month / All); each figure counts by its own
+  // date (bookings by date made, visits and invoices by visit date, tasks by due date, complaints by complaint date,
+  // WhatsApp by message date, app orders by order date). Figures that are a live state ("now") cannot follow the range.
   const tile=(k,v,d,act)=>`<div class="tile${act?' click':''}${act&&ACT_ON[act.split(':')[0]]===act?' on':''}"${act?` role="button" tabindex="0" data-act="${esc(act)}" title="Click to show these"`:''}><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d||'')}</div></div>`;
-  { const st=(v,k,act,tone)=>`<div class="tile ovstat" role="button" tabindex="0" data-act="${esc(act)}" title="Open"><div class="v"${tone?' style="color:var(--'+tone+')"':''}>${esc(v)}</div><div class="k">${esc(k)}</div></div>`;
+  { const R=csR('overview'), day=R.day, isToday=day===now.day, roster=CFG.roster[day]||null, multi=R.all||R.from!==R.to;
+    const inR=x=>R.all||R.has(x);
+    const hasNow=R.all||R.has(now.day), MONS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const dayLbl=R.all?'all dates':!multi?(isToday?'today':fmtDay(day)):hasNow?(CSF.overview.r==='week'?'this week':'this month'):(CSF.overview.r==='week'?'week of '+fmtDay(R.from):MONS[Number(R.from.slice(5,7))-1]);
+    const made=D.created.filter(r=>inR(dayOf(r.c))), vis=D.visits.filter(r=>inR(dayOf(r.d))), vs=cnt(vis,r=>r.s||'No status');
+    const st=(v,k,act,tone)=>`<div class="tile ovstat" role="button" tabindex="0" data-act="${esc(act)}" title="Open"><div class="v"${tone?' style="color:var(--'+tone+')"':''}>${esc(v)}</div><div class="k">${esc(k)}</div></div>`;
     const LK=CFG.links||{}, links=k=>(LK[k]||[]).length?'<div class="ovl">'+LK[k].map(([l,u])=>`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)} ↗</a>`).join('')+'</div>':'';
     const card=(key,eyebrow,title,act,stats,foot)=>`<div class="card ovc"><div class="ovh"><h2>${esc(title)}</h2><span class="eyebrow">${esc(eyebrow)}</span><a class="tile ovstat" style="padding:0" role="button" tabindex="0" data-act="${esc(act)}">Open ›</a></div><div class="ovs">${stats.join('')}</div><div class="ovf">${foot}</div>${links(key)}</div>`;
-    const m0=v=>'$'+Math.round(v||0).toLocaleString(), dayLbl=isToday?'today':fmtDay(day);
-    // workforce
-    const nowOn=roster&&isToday?agents.filter(p=>onAt(roster[p.name],now.min)):[];
-    const L=D.leave||[], offDay=L.filter(l=>l.status==='Approved'&&l.from<=day&&(l.to||l.from)>=day), pendL=L.filter(l=>l.status==='Pending');
-    const chips=CFG.people.map(p=>{ const c=roster?roster[p.name]:null, lv=['LEAVE','SICK'].includes(c), on=isToday&&c&&onAt(c,now.min), work=c&&shiftHours(c).length, out=isOut(c);
-      return `<span class="chip ${out?'out':on?'on':lv?'lv':work?'':'off'}" title="${esc(c?(hoursText(out?outBase(c):c)||codeLabel(c,p)):'No schedule')}">${esc(p.name)}${out?' · '+OUT_TXT:on?' · on now':lv?' · '+esc(((CFG.shift_codes[c]||{}).label||c).toLowerCase()):work?' · '+esc(c):' · off'}</span>`; }).join('');
+    const m0=v=>'$'+Math.round(v||0).toLocaleString();
+    // workforce: one day = who works that day; a longer range = shifts in the schedule tracker over the range
+    const rDays=Object.keys(CFG.roster||{}).sort().filter(d=>inR(d)), shiftsOf=p=>rDays.filter(d=>shiftHours(CFG.roster[d][p.name]).length).length;
+    const onCount=roster?agents.filter(p=>shiftHours(roster[p.name]).length).length:'–';
+    const nowRoster=CFG.roster[now.day]||null, nowOn=nowRoster?agents.filter(p=>onAt(nowRoster[p.name],now.min)):[];
+    const L=D.leave||[], offR=L.filter(l=>l.status==='Approved'&&l.from&&(R.all||(l.from<=R.to&&(l.to||l.from)>=R.from))), pendL=L.filter(l=>l.status==='Pending');
+    const chips=multi?CFG.people.map(p=>{ const n=shiftsOf(p), lv=rDays.filter(d=>['LEAVE','SICK'].includes(CFG.roster[d][p.name])).length;
+        return `<span class="chip ${n?'':'off'}" title="${esc(n+' shift'+(n===1?'':'s')+' in the schedule tracker, '+dayLbl)}">${esc(p.name)} · ${n} shift${n===1?'':'s'}${lv?' · '+lv+' day'+(lv===1?'':'s')+' off':''}</span>`; }).join('')
+      :CFG.people.map(p=>{ const c=roster?roster[p.name]:null, lv=['LEAVE','SICK'].includes(c), on=isToday&&c&&onAt(c,now.min), work=c&&shiftHours(c).length, out=isOut(c);
+        return `<span class="chip ${out?'out':on?'on':lv?'lv':work?'':'off'}" title="${esc(c?(hoursText(out?outBase(c):c)||codeLabel(c,p)):'No schedule')}">${esc(p.name)}${out?' · '+OUT_TXT:on?' · on now':lv?' · '+esc(((CFG.shift_codes[c]||{}).label||c).toLowerCase()):work?' · '+esc(c):' · off'}</span>`; }).join('');
     const wf=card('workforce','People','Workforce','go:schedule',[
-      st(isToday?nowOn.length:onCount,(isToday?'agents on shift now':'agents on shift')+(roster?split(p=>isToday?onAt(roster[p.name],now.min):shiftHours(roster[p.name]).length):''),'go:schedule',isToday&&roster&&!nowOn.length&&now.min>=toMin('09:00')&&now.min<toMin('22:00')?'bad':''),
-      st(onCount,'agents working '+dayLbl+(roster?split(p=>shiftHours(roster[p.name]).length):''),'go:schedule'),
-      st(offDay.length,'on approved time off','go:leave',offDay.length?'warn':''),
-      st(pendL.length,'time off to approve','go:leave',pendL.length?'warn':'')],chips);
-    // customer service
+      multi||isToday?st(nowOn.length,'agents on shift now'+(nowRoster?split(p=>onAt(nowRoster[p.name],now.min)):''),'go:schedule',nowRoster&&!nowOn.length&&now.min>=toMin('09:00')&&now.min<toMin('22:00')?'bad':'')
+        :st(onCount,'agents on shift'+(roster?split(p=>shiftHours(roster[p.name]).length):''),'go:schedule'),
+      multi?st(agents.reduce((a,p)=>a+shiftsOf(p),0),'agent shifts '+dayLbl+(opsA.length?' ('+csA.reduce((a,p)=>a+shiftsOf(p),0)+' CS, '+opsA.reduce((a,p)=>a+shiftsOf(p),0)+' Ops)':''),'go:schedule')
+        :st(onCount,'agents working '+dayLbl+(roster?split(p=>shiftHours(roster[p.name]).length):''),'go:schedule'),
+      st(offR.length,multi?'approved time off requests '+dayLbl:'on approved time off','go:leave',offR.length?'warn':''),
+      st(pendL.length,'time off to approve now','go:leave',pendL.length?'warn':'')],
+      chips+(multi&&!R.all&&rDays.length<Math.round((dparts(R.to)-dparts(R.from))/864e5)+1?`<div class="sub" style="margin:6px 0 0">The schedule tracker has ${rDays.length} of these days.</div>`:''));
+    // customer service: chats waiting are live; tasks by due date; complaints by complaint date; WhatsApp messages by date
     const W=D.wa_now, drift=W?Math.max(0,Math.round((Date.now()-new Date(D.generated).getTime())/60000)):0;
     const wt=W?W.waiting.filter(w=>!w.prov).map(w=>({...w,mins:w.mins+drift})):[], urg=wt.filter(w=>w.urgent||w.mins>=(W?W.urgent_after:30));
-    const tOpen=(D.tasks||[]).filter(t=>!['Completed','Cancelled','Deferred'].includes(t.s)), tOver=tOpen.filter(t=>t.due&&t.due<now.day);
+    const tOpenAll=(D.tasks||[]).filter(t=>!['Completed','Cancelled','Deferred'].includes(t.s)), tOpen=tOpenAll.filter(t=>R.all||R.has(t.due)), tOver=tOpen.filter(t=>t.due&&t.due<now.day);
+    const tOlder=R.all||R.to<now.day?[]:tOpenAll.filter(t=>t.due&&t.due<R.from);   // still open from before the range
+    const cDay=c=>dayOf(c.cd||c.c)||'', compR=openComp.filter(c=>R.all||R.has(cDay(c)));
+    const waDays=Object.keys(D.wa).filter(d=>inR(d)), waIn=waDays.reduce((a,d)=>a+(D.wa[d].in||0),0), waFirst=Object.keys(D.wa).sort()[0];
+    const waTxt=!multi?(D.wa[day]?(D.wa[day].in||0).toLocaleString()+' WhatsApp messages from '+(D.wa[day].chats||0)+' customers '+dayLbl:'No WhatsApp counts for '+dayLbl+' (kept for the last 14 days)')
+      :waIn.toLocaleString()+' WhatsApp messages from customers '+dayLbl+(waFirst&&(R.all||R.from<waFirst)?' (counts kept from '+fmtDay(waFirst)+')':'');
     const cs=card('service','Service','Customer Service','go:whatsapp',[
-      st(W?wt.length:'–','customer chats waiting','go:whatsapp',wt.length?'warn':''),
-      st(W?urg.length:'–','need urgent care','go:whatsapp',urg.length?'bad':''),
-      st(tOpen.length,'open tasks'+(tOver.length?', '+tOver.length+' overdue':''),'go:tasks:open',tOver.length?'warn':''),
-      st(openComp.length,'open complaints','go:complaints:open',openComp.length?'bad':'')],
-      esc(wa.in.toLocaleString()+' WhatsApp messages from '+wa.chats+' customers '+dayLbl+(W&&W.median_reply_min!=null?' · typical reply '+Math.round(W.median_reply_min)+' min':'')));
-    // services and bookings
+      st(W?wt.length:'–','customer chats waiting now','go:whatsapp',wt.length?'warn':''),
+      st(W?urg.length:'–','need urgent care now','go:whatsapp',urg.length?'bad':''),
+      st(tOpen.length,(R.all?'open tasks':'open tasks due '+dayLbl)+(tOver.length?', '+tOver.length+' overdue':'')+(tOlder.length?' (+'+tOlder.length+' older still open)':''),'go:tasks:open',tOver.length||tOlder.length?'warn':''),
+      st(compR.length,R.all?'open complaints':'open complaints logged '+dayLbl,'go:complaints:open',compR.length?'bad':'')],
+      esc(waTxt+(W&&W.median_reply_min!=null?' · typical reply '+Math.round(W.median_reply_min)+' min (last 48 hours)':'')));
+    // services and bookings: made by date made, visits and amounts by visit date; the next 7 days is live
     const nowIso=now.day+'T'+String(Math.floor(now.min/60)).padStart(2,'0')+':'+String(now.min%60).padStart(2,'0');
     const isDone=r=>r.s==='Completed'||(r.s==='Scheduled'&&(r.e||r.d||'').slice(0,16)<nowIso);
     const doneD=vis.filter(isDone), mon=day.slice(0,7), doneM=D.visits.filter(r=>(dayOf(r.d)||'').slice(0,7)===mon&&isDone(r));
     const up7=D.visits.filter(r=>dayOf(r.d)>now.day&&dayOf(r.d)<=addDays(now.day,7)&&r.s!=='Cancelled');
+    const bkFirst=D.visits.concat(D.created).map(r=>dayOf(r.d||r.c)).filter(Boolean).sort()[0];
     const bk=card('bookings','Services','Services and Bookings','go:bookings:visits',[
       st(made.length,'bookings made '+dayLbl,'go:bookings:made'),
       st(vis.length,'visits '+dayLbl+(vs.Cancelled?', '+vs.Cancelled+' cancelled':''),'go:bookings:visits'),
       st(m0(doneD.reduce((a,r)=>a+(r.amt||0),0)),'completed '+dayLbl+' ('+doneD.length+')','go:bookings:amount'),
       st(up7.length,'visits in the next 7 days','go:bookings:upcoming')],
-      esc(MON[Number(mon.slice(5))-1]+' so far: '+m0(doneM.reduce((a,r)=>a+(r.amt||0),0))+' completed from '+doneM.length+' visits, base price'));
-    // orders and inventory
-    const AO=(D.app_orders||[]).filter(o=>(o.c||'').slice(0,7)===mon), aoLive=AO.filter(o=>!['Cancelled','Refund'].includes(o.s)&&o.inv!=='Refunded'), aoAmt=aoLive.reduce((a,o)=>a+(o.amt||0),0);
-    const sent=(D.inv||[]).filter(b=>b.s==='Completed'&&b.inv==='Sent'), items=D.items||[], inSt=items.filter(i=>(i.q||0)>0), low=inSt.filter(i=>i.q<=5);
+      esc((CSF.overview.r==='day'||CSF.overview.r==='week'?MON[Number(mon.slice(5))-1]+' so far: '+m0(doneM.reduce((a,r)=>a+(r.amt||0),0))+' completed from '+doneM.length+' visits, base price':'Completed amounts are base price')+(R.all&&bkFirst?' · bookings data from '+fmtDay(bkFirst):'')));
+    // orders and inventory: app orders by order date, invoices by visit date; stock is not dated
+    const AO=(D.app_orders||[]).filter(o=>inR(dayOf(o.c))), aoLive=AO.filter(o=>!['Cancelled','Refund'].includes(o.s)&&o.inv!=='Refunded'), aoAmt=aoLive.reduce((a,o)=>a+(o.amt||0),0);
+    const sent=(D.inv||[]).filter(b=>b.s==='Completed'&&b.inv==='Sent'&&inR(dayOf(b.d))), items=D.items||[], inSt=items.filter(i=>(i.q||0)>0), low=inSt.filter(i=>i.q<=5);
     const od=card('orders','Orders and Xero','Orders and Inventory','go:orders',[
-      st(AO.length,'app orders this month','go:orders'),
+      st(AO.length,'app orders '+dayLbl,'go:orders'),
       st(m0(aoAmt),'app order value, not cancelled','go:orders'),
-      st(sent.length,'invoices sent, not paid','go:xero',sent.length?'warn':''),
-      st(low.length,'items low on stock','go:xero',low.length?'warn':'')],
-      esc(inSt.length+' of '+items.length+' Xero items in stock · '+m0(sent.reduce((a,b)=>a+(b.amt||0),0))+' in unpaid invoices, last 30 days'));
+      st(sent.length,'invoices sent, not paid'+(R.all?'':', visits '+dayLbl),'go:xero',sent.length?'warn':''),
+      st(low.length,'items low on stock now','go:xero',low.length?'warn':'')],
+      esc(inSt.length+' of '+items.length+' Xero items in stock now · '+m0(sent.reduce((a,b)=>a+(b.amt||0),0))+' in unpaid invoices'+(R.all?'':', visits '+dayLbl)+' (invoice list covers the last 30 days)'));
     $('ov').innerHTML=wf+cs+bk+od;
   }
 
