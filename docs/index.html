@@ -526,6 +526,21 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
   <section data-panel="tasks">
     <div class="tiles" id="tkTiles"></div>
     <p style="margin:0 4px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="btnlink" id="tkTracker" href="#tasks" target="_blank" rel="noopener">Open the Task Tracker ›</a><span class="sub" style="margin:0">Work your tasks in the Task Tracker sheet, not in Zoho CRM. Changes sync to the CRM, and show here, within a minute or two.</span></p>
+    <div class="card" id="crCard">
+      <h2>Closure rate</h2>
+      <p class="sub">Target: <b>80%</b> of tasks closed the same day they were created, and <b>100%</b> within 2 days. A task is closed when its Status is Completed or Cancelled. A task that has to wait needs a note and a next date.</p>
+      <div class="rangebar" style="margin:6px 0 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <div class="seg" role="group" aria-label="Period" id="crRange"><button data-cr="this">This week</button><button data-cr="last">Last week</button><button data-cr="30">Last 30 days</button></div>
+        <div class="seg" role="group" aria-label="Which tasks" id="crScope"><button data-cs="wa">WhatsApp reply tasks</button><button data-cs="all">All tasks</button></div>
+        <span id="crLabel" class="rangelabel"></span>
+      </div>
+      <div class="tiles" id="crTiles"></div>
+      <h3 style="margin:6px 0 4px;font-size:15px">By agent</h3>
+      <div class="tablewrap"><table id="crAgents"></table></div>
+      <h3 style="margin:16px 0 4px;font-size:15px" id="crOldTitle">Open 2 days or more</h3>
+      <p class="sub" style="margin:0 0 6px">Every open task in this group that is 2 or more days old, whatever the period above. Close it, or give it a note and a next date.</p>
+      <div class="tablewrap"><table id="crOld"></table></div>
+    </div>
     <details class="card fold" id="tkVideo">
       <summary><h2>How to use the Task Tracker (1½-minute video)</h2><span class="foldhint"></span></summary>
       <p class="sub">For CS agents: filtering your tasks, changing status, the red required cells and Status Needs column, picking providers from the list, and adding a new task. Screens use demo data.</p>
@@ -1431,6 +1446,7 @@ function render(day){
   const ownSel=$('tkOwner'), cur=ownSel.value; const owners=[...new Set(T.map(t=>t.own).filter(Boolean))].sort();
   ownSel.innerHTML='<option value="">Everyone</option>'+owners.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
   renderBoard();
+  renderClosure();
 
   // ---- provider status: each visit's step, worked out from Booking Status, the provider and the clock ----
   { const pd=PS_TOM?addDays(now.day,1):day, nowM=pd<now.day?1e6:pd>now.day?-1e6:now.min, isT=pd===now.day;
@@ -1611,6 +1627,53 @@ const initials=n=>(n||'?').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].t
 const FOLD={}; 
 let TK_VIEW='all';
 const TK_LABEL={all:'',open:'Open tasks only',overdue:'Overdue tasks only',today:'Tasks due today only',waiting:'Waiting tasks only',done:'Tasks done in the last 14 days only'};
+// Closure rate (Agent Tasks): share of tasks closed the same day and within 2 days, against the 80% / 100% targets.
+// Charlene, 26 Nov: the same chats stayed open since Monday, so the targets need closure rates.
+let CR_RANGE='this', CR_SCOPE='wa';
+const CR_TARGET={same:80,two:100};
+const crDiff=(a,b)=>Math.round((dparts(b)-dparts(a))/864e5);
+function renderClosure(){
+  if(!$('crCard')) return;
+  const today=sgNow().day, dow=dparts(today).getUTCDay(), mon=addDays(today,-((dow+6)%7));
+  const R={this:[mon,today],last:[addDays(mon,-7),addDays(mon,-1)],'30':[addDays(today,-29),today]}[CR_RANGE];
+  const CLOSED=t=>['Completed','Cancelled','Deferred'].includes(t.s);
+  const closedDay=t=>CLOSED(t)?(dayOf(t.cl)||dayOf(t.m)||today):null;
+  const inScope=t=>!/^TEST/i.test(t.sub||'')&&(CR_SCOPE==='all'||/^WhatsApp reply/.test(t.sub||''));
+  const ALL=(D.tasks||[]).filter(t=>t.c&&inScope(t)), P=ALL.filter(t=>dayOf(t.c)>=R[0]&&dayOf(t.c)<=R[1]);
+  // today's tasks still have the day to go, so the rates are worked out on tasks created before today
+  const stats=L=>{ const base=L.filter(t=>dayOf(t.c)<today), same=base.filter(t=>CLOSED(t)&&crDiff(dayOf(t.c),closedDay(t))<=0),
+      two=base.filter(t=>CLOSED(t)&&crDiff(dayOf(t.c),closedDay(t))<=2), tod=L.filter(t=>dayOf(t.c)===today);
+    return {n:base.length, same:same.length, two:two.length, open:L.filter(t=>!CLOSED(t)).length, tod:tod.length, todClosed:tod.filter(CLOSED).length}; };
+  const pc=(a,b)=>b?Math.round(a*100/b):null, show=v=>v==null?'–':v+'%';
+  const cls=(v,target)=>v==null?'':v>=target?'on':v>=target-20?'warn':'bad';
+  const S=stats(P), p1=pc(S.same,S.n), p2=pc(S.two,S.n);
+  const OLD=ALL.filter(t=>!CLOSED(t)&&crDiff(dayOf(t.c),today)>=2).sort((a,b)=>a.c<b.c?-1:1);
+  // the 8:00 AM digest fills Waiting On with the same words on every WhatsApp task, so that text is not a note
+  const hasNote=t=>!!(t.nt||(t.out||'').trim()||(t.wait&&!/^CS reply on WhatsApp$/i.test(t.wait)));
+  const tile=(k,v,d,c)=>`<div class="tile"${c?` style="border-color:var(--${c});box-shadow:0 0 0 1px var(--${c}) inset"`:''}><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${d}</div></div>`;
+  const tc=(v,target)=>v==null?'':v>=target?'':'bad';
+  $('crLabel').textContent=fmtDay(R[0])+' to '+fmtDay(R[1]);
+  $('crTiles').innerHTML=
+    tile('Closed the same day',show(p1),`<b>${S.same}</b> of ${S.n} tasks · target ${CR_TARGET.same}%`,tc(p1,CR_TARGET.same))+
+    tile('Closed within 2 days',show(p2),`<b>${S.two}</b> of ${S.n} tasks · target ${CR_TARGET.two}%`,tc(p2,CR_TARGET.two))+
+    tile('Open 2 days or more',OLD.length,OLD.length?'oldest from '+esc(fmtDay(dayOf(OLD[0].c))):'none, all caught up',OLD.length?'bad':'')+
+    tile('Created today',S.tod,`<b>${S.todClosed}</b> closed so far`,'');
+  const owners=[...new Set(P.map(t=>t.own||'No owner'))].sort();
+  const pill=(v,target)=>v==null?'<span class="muted">–</span>':`<span class="pill ${cls(v,target)}">${v}%</span>`;
+  $('crAgents').innerHTML=owners.length?'<tr><th>Agent</th><th class="num">Tasks</th><th>Same day</th><th>Within 2 days</th><th class="num">Open now</th><th>Oldest open</th></tr>'+
+    owners.map(o=>{ const L=P.filter(t=>(t.own||'No owner')===o), s=stats(L), op=ALL.filter(t=>(t.own||'No owner')===o&&!CLOSED(t)).sort((a,b)=>a.c<b.c?-1:1);
+      return `<tr><td>${esc(o)}</td><td class="num">${s.n}</td><td>${pill(pc(s.same,s.n),CR_TARGET.same)} <span class="muted">${s.same} of ${s.n}</span></td><td>${pill(pc(s.two,s.n),CR_TARGET.two)} <span class="muted">${s.two} of ${s.n}</span></td><td class="num">${op.length}</td><td>${op.length?esc(fmtDay(dayOf(op[0].c)))+' <span class="muted">('+crDiff(dayOf(op[0].c),today)+' days)</span>':'<span class="muted">none</span>'}</td></tr>`; }).join(''):
+    '<tr><td class="muted">No tasks were created in this period.</td></tr>';
+  $('crOldTitle').textContent='Open 2 days or more ('+OLD.length+')';
+  const biz=t=>/^(Media|Business|Supplier|Sales|Partnership|Marketing) enquiry/i.test(t.desc||'');
+  $('crOld').innerHTML=OLD.length?'<tr><th>Task</th><th>Agent</th><th>Created</th><th>Status</th><th>Next date</th><th>Note</th></tr>'+
+    OLD.map(t=>`<tr><td>${recLink('task',t.id,t.sub||'(no subject)')}${biz(t)?' <span class="pill brand" title="Not a customer: needs a decision from Vince or Charlene">business enquiry</span>':''}</td><td style="white-space:nowrap">${esc(t.own||'No owner')}</td><td style="white-space:nowrap">${esc(fmtDay(dayOf(t.c)))} <span class="muted">(${crDiff(dayOf(t.c),today)} days)</span></td><td>${esc(t.s||'No status')}</td><td style="white-space:nowrap">${!t.due?'<span class="pill bad">none</span>':t.due<today?'<span class="pill bad">'+esc(fmtDay(t.due))+', passed</span>':esc(fmtDay(t.due))}</td><td>${hasNote(t)?'yes':'<span class="pill warn">no note</span>'}</td></tr>`).join(''):
+    '<tr><td class="muted">Nothing older than 2 days is open. All caught up.</td></tr>';
+  document.querySelectorAll('#crRange button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.cr===CR_RANGE));
+  document.querySelectorAll('#crScope button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.cs===CR_SCOPE));
+}
+document.addEventListener('click',e=>{ const a=e.target.closest('#crRange button'), b=e.target.closest('#crScope button'); if(a){ CR_RANGE=a.dataset.cr; renderClosure(); } else if(b){ CR_SCOPE=b.dataset.cs; renderClosure(); } });
+
 function renderBoard(){
   const now=sgNow(), q=($('tkSearch').value||'').toLowerCase(), who=$('tkOwner').value;
   const since14=addDays(now.day,-14);
