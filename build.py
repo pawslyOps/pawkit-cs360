@@ -136,6 +136,7 @@ def main():
         "cust": raw.get("cust"),
         "leave": leave,
         "tasks": raw.get("tasks", []),
+        "trk": raw.get("tracker_rows") or {},
         "orders": raw.get("orders", []),
         "app_orders": raw.get("app_orders", []),
         "owners": raw.get("owners"),

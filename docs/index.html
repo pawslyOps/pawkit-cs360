@@ -553,7 +553,7 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
     </details>
     <div class="card board-card">
       <div class="board-head">
-        <div><h2>Tasks</h2><p class="sub" style="margin:0">The same tasks as the Task Tracker, by status. Click a task to open it in Zoho, or a heading to fold it.</p><p class="sub" id="tkFilterNote" style="margin:4px 0 0;font-weight:700;color:var(--brand)"></p></div>
+        <div><h2>Tasks</h2><p class="sub" style="margin:0">The same tasks as the Task Tracker, by status. Click a task to open it in Zoho CRM, Tracker to jump to its row in the Task Tracker, or a heading to fold it.</p><p class="sub" id="tkFilterNote" style="margin:4px 0 0;font-weight:700;color:var(--brand)"></p></div>
         <div class="board-tools">
           <input id="tkSearch" type="search" placeholder="Search tasks" aria-label="Search tasks">
           <select id="tkOwner" aria-label="Filter by person"><option value="">Everyone</option></select>
@@ -948,6 +948,7 @@ let DECIDE=null;
 })();
 // WhatsApp reply status: answered, waiting, needs urgent care (worked out by refresh.py from the last 48 hours)
 // a record name that opens that record in Zoho CRM (link bases come from the private config)
+const trkLink=id=>{ const u=(CFG&&CFG.links||{}).tracker, r=((D&&D.trk)||{})[id]; return u&&r?`<a class="tk-upd" href="${esc(u+(u.includes('?')?'&':'?')+'sheetid=0&range=A'+r)}" target="_blank" rel="noopener" title="Open this task's row in the Task Tracker (row ${r})">Tracker</a>`:''; };
 const recLink=(kind,id,text)=>{ const b=((CFG&&CFG.links||{}).record||{})[kind]; return b&&id?`<a href="${esc(b+encodeURIComponent(id))}" target="_blank" rel="noopener" title="Open in Zoho">${esc(text)}</a>`:esc(text); };
 let WN_F='waiting', WN_SEG='cust', WN_ROWS=[];
 // ---- date filter for the Customer Service pages (each page remembers its own range) ----
@@ -1703,7 +1704,7 @@ function renderBoard(){
       const nice=x=>x.charAt(0)+x.slice(1).toLowerCase(), meta=[g.k==='wait'?WAIT_ON[t.s]||nice(t.s):(g.k==='todo'&&t.s&&t.s!=='Not Started'?nice(t.s):''), t.wait||'', t.prov?t.prov:'', t.bid?'Booking '+t.bid:''].filter(Boolean).join(' · ');
       const hi=/^High/.test(t.pr||'')?`<span class="tk-pr">${esc(t.pr)}</span>`:'';
       return `<div class="tk"><div class="tk-main"><div class="tk-sub">${recLink('task',t.id,t.sub||'(no subject)')}${hi}${/^TEST/i.test(t.sub||'')?' <span class="pill">test</span>':''}</div>${meta?`<div class="tk-meta">${esc(meta)}</div>`:''}</div>
-        <div class="tk-side"><span class="tk-own">${t.own?`<span class="av" style="background:${avCol(t.own)}" title="${esc(t.own)}">${esc(initials(t.own))}</span>${esc(t.own.split(' ')[0])}`:'<span class="muted">No owner</span>'}</span>${dueTxt(t)}</div></div>`;
+        <div class="tk-side"><span class="tk-own">${t.own?`<span class="av" style="background:${avCol(t.own)}" title="${esc(t.own)}">${esc(initials(t.own))}</span>${esc(t.own.split(' ')[0])}`:'<span class="muted">No owner</span>'}</span>${dueTxt(t)}${trkLink(t.id)}</div></div>`;
     }).join(''):'<div class="tk muted" style="font-size:13px">Nothing here.</div>';
     html+='</div></div>';
   });

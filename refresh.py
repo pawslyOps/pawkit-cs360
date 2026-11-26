@@ -440,6 +440,63 @@ def sheet_roster(z):
     return cache.get("roster") or {}
 
 
+TRK_CACHE = os.path.join(HERE, "raw", "tracker_rows.json")
+
+
+def tracker_rows(z):
+    """{task id: row number} from the Task Tracker sheet (tab Tasks, column headed "Record ID"), so the page can link
+    each task to its row. Read at most every 5 minutes; on any failure the last good copy is used for 10 minutes."""
+    try:
+        with open(TRK_CACHE) as f:
+            cache = json.load(f)
+    except (OSError, ValueError):
+        cache = {}
+    if time.time() - cache.get("read", 0) < 300 or cache.get("retry_after", 0) > time.time():
+        return cache.get("rows") or {}
+    try:
+        with open(os.path.expanduser("~/.config/pawkit-cs360/config.json")) as f:
+            url = (json.load(f).get("links") or {}).get("tracker") or ""
+        m = re.search(r"/open/([A-Za-z0-9]+)", url)
+        if not m:
+            return cache.get("rows") or {}
+        sid = m.group(1)
+
+        def call(**params):
+            req = urllib.request.Request("https://sheet.zoho.com/api/v2/" + sid, data=urllib.parse.urlencode(params).encode(),
+                                         headers={"Authorization": "Zoho-oauthtoken " + z.token()}, method="POST")
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+
+        def grid(j):
+            for v in j.values():
+                if isinstance(v, list) and v and all(isinstance(x, list) for x in v):
+                    return v
+            return []
+        head = grid(call(method="worksheet.content.get", worksheet_name="Tasks", start_row=1, end_row=1, start_column=1, end_column=45,
+                         response_type="array", major_dimension="rows"))
+        hdr = [str(x or "").strip() for x in (head[0] if head else [])]
+        if "Record ID" not in hdr:
+            raise ValueError("no Record ID column")
+        col = hdr.index("Record ID") + 1
+        cells = grid(call(method="worksheet.content.get", worksheet_name="Tasks", start_row=2, end_row=3000, start_column=col, end_column=col,
+                          response_type="array", major_dimension="rows"))
+        rows = {}
+        for i, r in enumerate(cells):
+            v = "".join(ch for ch in str((r[0] if r else "") or "") if ch.isdigit())
+            if len(v) >= 15:
+                rows[v] = i + 2
+        cache = {"rows": rows, "read": time.time()}
+    except Exception as e:   # an extra: nothing here may stop the rest of the update
+        detail = e.read()[:120].decode("utf-8", "replace") if isinstance(e, urllib.error.HTTPError) else str(e)[:120]
+        print("WARNING task tracker rows could not be read (%s %s); using the last copy" % (type(e).__name__, detail))
+        cache["retry_after"] = time.time() + 600
+    tmp = TRK_CACHE + ".%d.tmp" % os.getpid()
+    with open(tmp, "w") as f:
+        json.dump(cache, f)
+    os.replace(tmp, TRK_CACHE)
+    return cache.get("rows") or {}
+
+
 def why(r):  # why a booking did not go ahead: Zoho's closure reason plus the staff's reason text and internal note
     if r.get("Booking_Status") in ("Scheduled", "Completed"):
         return {}
@@ -820,7 +877,7 @@ def main():
         print("WARNING notice read skipped:", str(e)[:120])
 
     out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
-           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice, "owners": owners}
+           "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "tracker_rows": tracker_rows(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice, "owners": owners}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
         json.dump(out, f)
