@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pawkit Ops360: encrypt the CS Connect meeting notes for the Customer Service > CS Connect sub-tab.
 
-Usage: python3 -I csconnect.py
+Usage: python3 csconnect.py
 Reads the notes from ~/.config/pawkit-cs360/csconnect.json and the CS Connect passcode from
 ~/.config/pawkit-cs360/csconnect-passcode (both private, never in this public repo).
 Writes docs/csconnect.js (PBKDF2-SHA256 + AES-256-GCM, decrypted in the browser), then commit and push main.

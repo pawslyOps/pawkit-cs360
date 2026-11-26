@@ -42,5 +42,5 @@ Anything already published under an old passcode stays readable with that passco
 
 - Notes and actions from the weekly CS meetings, under their own passcode (separate from the team passcode).
 - The notes live only in `~/.config/pawkit-cs360/csconnect.json`; the passcode only in `~/.config/pawkit-cs360/csconnect-passcode`. Never commit either.
-- To publish or update: edit `csconnect.json` (newest meeting shown first), run `python3 -I csconnect.py`, then commit and push `docs/csconnect.js` on `main`.
+- To publish or update: edit `csconnect.json` (newest meeting shown first), run `python3 csconnect.py`, then commit and push `docs/csconnect.js` on `main`.
 - The page keeps the CS Connect passcode for the browser tab only; Lock clears it.
