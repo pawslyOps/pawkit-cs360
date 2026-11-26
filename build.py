@@ -92,6 +92,10 @@ def main():
             for n, c in list(r.items()):
                 if isinstance(c, str) and c.strip() in codes:
                     r[n] = c.strip()
+                elif isinstance(c, str) and c.strip().endswith(" OUT") and c.strip()[:-4].strip() in codes:
+                    # "AM OUT" in the sheet = scheduled AM but not present, time off not filed or approved yet:
+                    # the page draws the shift in red and does not count the person as on shift
+                    r[n] = "OUT:" + c.strip()[:-4].strip()
                 elif c:
                     print("WARNING unknown shift code %r for %s on %s (shown as typed, counted as not on shift)" % (c, n, d))
         fd = os.open(last_good + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
