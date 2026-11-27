@@ -112,6 +112,18 @@ def parse_slot(txt, sent):
     return datetime(day.year, day.month, day.day, hh if hh is not None else 0, mm or 0, tzinfo=sent.tzinfo).isoformat(timespec="minutes") + ("" if hh is not None else "|day")
 
 
+PET_SKIP = {"cat", "dog", "cats", "dogs", "baby", "boy", "girl", "rabbit", "bunny", "puppy", "kitty", "test", "na", "nil", "none", "pet"}
+
+
+def pet_in(name, low):
+    """The booking's pet name, as a whole word, in the job request (each pet of 'Tum Tum & Dobby' counts)."""
+    for n in re.split(r"\s*(?:&|,|/|\band\b)\s*", (name or "").lower()):
+        n = n.strip()
+        if len(n) >= 3 and n not in PET_SKIP and re.search(r"(?<![a-z])" + re.escape(n) + r"(?![a-z])", low):
+            return True
+    return False
+
+
 def job_requests(z, now):
     since = (now - timedelta(days=DAYS)).isoformat(timespec="seconds")
     sel = "select %sFrom, %sTo, %sDirection, %sMessage_Data, %sMessage_Date_time from %sWoztell_logs" % (W, W, W, W, W, W)
@@ -139,12 +151,13 @@ def job_requests(z, now):
 
     # bookings made in the window, keyed by the last 4 digits of the customer's mobile
     # and by the service address postcode, for job requests sent without the #number
-    bk, bypc = {}, {}
-    for r in z.all("select Name, Date_Time, Created_Time, Booking_Status, Partner_Name.Name, Service_Category, Postal_Code, Pet_Owner.Mobile_Number from Booking where Created_Time >= '%s'"
+    bk, bypc, allbk = {}, {}, []
+    for r in z.all("select Name, Date_Time, Created_Time, Booking_Status, Partner_Name.Name, Service_Category, Postal_Code, Pet_Name, Pet_Owner.Mobile_Number from Booking where Created_Time >= '%s'"
                    % (now - timedelta(days=DAYS + 14)).isoformat(timespec="seconds")):
         d = digits(r.get("Pet_Owner.Mobile_Number"))
         if len(d) >= 4:
             bk.setdefault(d[-4:], []).append(r)
+        allbk.append(r)
         pc = digits(r.get("Postal_Code"))
         if pc:
             bypc.setdefault(pc.zfill(6), []).append(r)
@@ -158,7 +171,7 @@ def job_requests(z, now):
         if not j:
             j = {"key": k, "_first": at, "first": at.isoformat(timespec="minutes"), "svc": service_of(t),
                  "price": (re.search(r"\$\s?(\d+)", t) or [None, None])[1], "num": k[1:] if k[0] == "#" else None, "p": {},
-                 "pc": next((a or b for a, b in POST_RX.findall(t)), None)}
+                 "pc": next((a or b for a, b in POST_RX.findall(t)), None), "_t": t}
             jobs.append(j)
         to = r.get(W + "To")
         j["p"].setdefault(to, {"n": names.get(to) or "…" + (to or "")[-4:], "sent": at.isoformat(timespec="minutes"), "_sent": at})
@@ -208,8 +221,11 @@ def job_requests(z, now):
                 break
         # the booking: first by the #number (customer's phone), else by the postcode in the job request. CS often makes the
         # booking record before asking providers, so a booking made up to 2 days before the first job request counts.
-        for how, pool in (("#number", bk.get(j["num"]) if j["num"] else None), ("postcode", bypc.get(j["pc"]) if j.get("pc") else None)):
-            cand = [b for b in (pool or []) if f - timedelta(days=2) <= datetime.fromisoformat(b["Created_Time"]) <= f + timedelta(days=GROUP_DAYS + 7)]
+        low = j["_t"].lower()
+        pets = [b for b in allbk if pet_in(b.get("Pet_Name"), low)]
+        for how, pool, before in (("#number", bk.get(j["num"]) if j["num"] else None, 2), ("postcode", bypc.get(j["pc"]) if j.get("pc") else None, 2),
+                                  ("pet name", pets, 7)):
+            cand = [b for b in (pool or []) if f - timedelta(days=before) <= datetime.fromisoformat(b["Created_Time"]) <= f + timedelta(days=GROUP_DAYS + 7)]
             if cand:
                 b = min(cand, key=lambda b: (0 if j.get("cp") and b.get("Partner_Name.Name") == j["cp"] else 1,
                                              abs((datetime.fromisoformat(b["Created_Time"]) - f).total_seconds())))
@@ -222,6 +238,7 @@ def job_requests(z, now):
         ps = sorted(j["p"].values(), key=lambda p: p["sent"])
         for p in ps:
             p.pop("_sent", None)
+        j.pop("_t", None)
         offers = sorted(p["slot"] for p in ps if p.get("slot"))
         firstrep = min((p["rep"] for p in ps if p.get("rep")), default=None)
         row = {"num": j["num"], "key": j["key"] if j["key"][0] != "T" else None, "svc": j["svc"], "price": j["price"], "first": j["first"],
