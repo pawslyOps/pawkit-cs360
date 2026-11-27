@@ -1103,14 +1103,14 @@ document.addEventListener('click',e=>{ const row=e.target.closest('tr.wrow'); if
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') waPopClose(); const row=e.target.closest&&e.target.closest('tr.wrow'); if(row&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); waPop(row); } });
 document.addEventListener('click',e=>{ const b=e.target.closest('#waSeg button'); if(b){ WN_SEG=b.dataset.s; renderWaNow(); } });
 document.addEventListener('click',e=>{ const t=e.target.closest('[data-wn]'); if(!t) return; WN_F=t.dataset.wn==='all'?'waiting':t.dataset.wn; renderWaNow(); $('waNow').closest('.card').scrollIntoView({behavior:'smooth',block:'nearest'}); });
-// sick leave needs a medical document: say whether one is attached to the request in Zoho
-const docPill=l=>l.type!=='Sick leave'||l.doc==null?'':l.doc?' <span class="pill on">document attached</span>':' <span class="pill bad">no document</span>';
+// a request can carry a document (the MC for sick leave, a vet bill and so on): say whether one is attached in Zoho
+const docPill=l=>l.doc?` <span class="pill on" title="${esc(l.docn||'')}">document attached</span>`:l.type==='Sick leave'&&l.doc!=null?' <span class="pill bad">no document</span>':'';
 // once the dashboard data is open on this device, show whose request it is
 function decideDetails(){
   const el=$('dcWho'); if(!el||!DECIDE||typeof D==='undefined'||!D||!D.leave) return;
   const l=D.leave.find(x=>x.id===DECIDE.id); if(!l) return;
   el.style.display='block';
-  el.innerHTML='<b>'+esc(l.name||'')+'</b> · '+esc(l.type||'')+docPill(l)+'<br>'+esc(l.from===l.to||!l.to?fmtDay(l.from):fmtDay(l.from)+' to '+fmtDay(l.to))+(isHalf(l)?' · half day'+(typeof l.half==='string'?', '+esc(l.half):''):'')+(l.status!=='Pending'?'<br>Already '+esc(String(l.status).toLowerCase())+(l.by?' by '+esc(l.by):'')+'. Confirming again replaces an email decision.':'');
+  el.innerHTML='<b>'+esc(l.name||'')+'</b> · '+esc(l.type||'')+docPill(l)+(l.doc&&l.docn?'<br><span class="muted">Attached: '+esc(l.docn)+'</span>':'')+'<br>'+esc(l.from===l.to||!l.to?fmtDay(l.from):fmtDay(l.from)+' to '+fmtDay(l.to))+(isHalf(l)?' · half day'+(typeof l.half==='string'?', '+esc(l.half):''):'')+(l.status!=='Pending'?'<br>Already '+esc(String(l.status).toLowerCase())+(l.by?' by '+esc(l.by):'')+'. Confirming again replaces an email decision.':'');
 }
 
 function init(data){

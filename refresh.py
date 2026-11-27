@@ -835,7 +835,7 @@ def main():
               "asked": r.get("Created_Time"), "by": nm(r.get("Modified_By")) if (r.get("Leave_Status") in ("Approved", "Rejected")) else None,
               "when": r.get("Modified_Time"), "half": half_of(r)} for r in lv]
 
-    # sick leave needs a medical document: is a file attached to the request? (a found file is remembered)
+    # is a file attached to the request? sick leave must have the MC; other types may carry a vet bill and so on
     if leave:
         dpath = os.path.join(HERE, "raw", "doc_cache.json")
         try:
@@ -843,17 +843,25 @@ def main():
                 docs = json.load(f)
         except (OSError, ValueError):
             docs = {}
+        fresh = (today - timedelta(days=14)).isoformat()
         for l in leave:
-            if l["type"] != "Sick leave":
-                continue
-            if not docs.get(l["id"]):
+            got = docs.get(l["id"])
+            if not got:
+                # a request stops being re-checked once it is decided and two weeks old (one Zoho call each, every run)
+                if l["status"] != "Pending" and (l.get("asked") or "")[:10] < fresh:
+                    l["doc"] = False if got is False else None
+                    continue
                 try:
-                    j = z.req("/crm/v5/Leave_Requests/%s/Attachments?fields=id" % l["id"])
-                    docs[l["id"]] = bool(j.get("data"))
+                    j = z.req("/crm/v5/Leave_Requests/%s/Attachments?fields=id,File_Name" % l["id"])
+                    got = docs[l["id"]] = [a.get("File_Name") or "document" for a in (j.get("data") or [])] or False
                 except SystemExit as e:
                     print("WARNING attachments could not be read:", str(e)[:120])
-                    docs[l["id"]] = None
-            l["doc"] = docs.get(l["id"])
+                    got = docs[l["id"]] = None
+            if got is True:   # older cache kept only yes/no
+                got = ["document"]
+            l["doc"] = None if got is None else bool(got)
+            if got:
+                l["docn"] = ", ".join(got)
         with open(dpath, "w") as f:
             json.dump({k: v for k, v in docs.items() if v}, f)
 
