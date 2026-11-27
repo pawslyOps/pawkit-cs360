@@ -955,7 +955,19 @@ def main():
     except SystemExit as e:
         print("WARNING notice read skipped:", str(e)[:120])
 
-    out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
+    # job requests to providers, read from the WhatsApp logs (jobreq.py): first contact, providers asked, slots offered, booking.
+    # About 5 Zoho calls, so read at most every 15 minutes; a failed read keeps the last good copy.
+    try:
+        import jobreq
+        jobs = slow("job_requests", 900, lambda: jobreq.job_requests(z, now))
+    except SystemExit as e:
+        print("WARNING job requests could not be read:", str(e)[:120])
+        jobs = None
+    except Exception as e:   # a parsing bug must never stop the rest of the dashboard
+        print("WARNING job requests failed:", repr(e)[:160])
+        jobs = None
+
+    out = {"generated": now.isoformat(timespec="seconds"), "visits_until": end_vis, "jobs": jobs, "wa": wa, "wa_now": wa_now, "created": created, "visits": visits, "comp": comp, "cust": hist["cust"], "leave": leave,
            "bal": bal, "tasks": tasks, "orders": orders, "app_orders": app_orders, "sheet_roster": sheet_roster(z), "tracker_rows": tracker_rows(z), "items": items, "inv": inv, "ratings": ratings, "credits": credits, "notice": notice, "owners": owners}
     tmp = os.path.join(HERE, "raw", "crm.json.tmp")
     with open(tmp, "w") as f:
