@@ -94,7 +94,8 @@ class Zoho:
                 return {}
             body = e.read()[:300]
             txt = body.decode("utf-8", "replace")
-            if e.code == 429 or "LIMIT" in txt.upper():
+            # "max records limit exceeded" is a query reading past COQL's 10,000 rows, not a credit problem: never pause for it
+            if e.code == 429 or ("LIMIT" in txt.upper() and "MAX RECORDS" not in txt.upper()):
                 # credits used up -> pause an hour; too many calls at once -> pause 5 minutes
                 secs = 300 if "TOO_MANY_REQUESTS" in txt.upper() else 3600
                 with open(PAUSE, "w") as f:
@@ -117,6 +118,9 @@ class Zoho:
             if not j.get("info", {}).get("more_records"):
                 return out
             off += 2000
+            if off >= 10000:   # COQL reads at most 10,000 rows for one query: take what came back and say so
+                print("WARNING query stopped at Zoho's 10,000-row limit: %s" % q[:120])
+                return out
 
 
 # ---- WhatsApp reply status: which conversations are answered, waiting, or need urgent care ----
