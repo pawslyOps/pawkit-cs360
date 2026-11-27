@@ -12,7 +12,7 @@ import json, re
 from datetime import datetime, timedelta
 
 W = "woztellplatformintegration__"
-DAYS = 21                 # how far back to read job requests
+DAYS = 45                 # how far back to read job requests
 GROUP_DAYS = 7            # messages with the same #number or postcode within this many days are one job
 REPLY_HOURS = 24          # a provider's messages within this many hours of a job request count as the answer
 JOB_RX = re.compile(r"pawkit\s*com", re.I)

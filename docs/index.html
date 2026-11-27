@@ -651,6 +651,9 @@ tr.wrow .readmsg{color:var(--brand);font-size:12px;font-weight:700;margin-left:6
 
   <!-- PROVIDER STATUS MANUAL -->
   <section data-panel="jobs">
+    <div class="rangebar"><div class="seg" role="group" aria-label="Range" id="jrRange"><button data-r="day">Day</button><button data-r="week">Week</button><button data-r="month">Month</button><button data-r="all">All</button></div>
+      <div class="datepick"><button id="jrPrev" aria-label="Previous" title="Previous">‹</button><input id="jrDate" type="date" aria-label="Pick a date"><button id="jrNext" aria-label="Next" title="Next">›</button><button id="jrToday" class="todaybtn">Today</button></div>
+      <span id="jrLabel" class="rangelabel"></span></div>
     <div class="tiles" id="jrTiles"></div>
     <div class="card">
       <h2>Job requests to providers</h2>
@@ -1188,6 +1191,7 @@ function showUpdated(){
   el.style.color=mins<=LV?'var(--good)':mins>60?'var(--warn)':'';
 }
 const ACT_ON={};
+let JR_RANGE='week', JR_DAY=null;   // Job Requests: same bar, plus All (every day read, 21 days)
 let SA_RANGE='month', SA_DAY=null;   // Service Satisfaction: same Day / Week / Month bar as Bookings (SA_DAY null = today)
 let PS_TOM=0;         // Provider Status: 0 = the day picked at the top, 1 = tomorrow
 let SCHED_WEEK=0;  // Week schedule: weeks before (-) or after (+) the week of the day picked at the top
@@ -1608,13 +1612,25 @@ function render(day){
   }
 
   // ---- job requests: first contact, providers asked, slots offered, final booking (refresh.py -> jobreq.py) ----
-  { const JR=(D.jobs&&D.jobs.jobs)||[], med=a=>{ a=a.filter(x=>x!=null).sort((x,y)=>x-y); return a.length?(a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2):null; };
+  { const JA=(D.jobs&&D.jobs.jobs)||[], jrMin=JA.map(j=>(j.first||'').slice(0,10)).filter(Boolean).sort()[0]||now.day, jrDay=JR_DAY||now.day;
+    const JS=JR_RANGE==='all'?{from:jrMin,to:now.day,label:'All job requests read, from '+fmtDay(jrMin)}:spanOf(JR_RANGE,jrDay);
+    const JR=JA.filter(j=>{ const x=(j.first||'').slice(0,10); return x>=JS.from&&x<=JS.to; });
+    document.querySelectorAll('#jrRange button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.r===JR_RANGE)));
+    { const di=$('jrDate'); di.min=jrMin; di.max=now.day; di.value=jrDay; di.disabled=JR_RANGE==='all'; $('jrPrev').disabled=JR_RANGE==='all'||JS.from<=jrMin; $('jrNext').disabled=JR_RANGE==='all'||JS.to>=now.day; }
+    $('jrLabel').textContent=JS.label;
+    if(!$('jrRange').dataset.on){ $('jrRange').dataset.on=1; const go=()=>render($('day').value);
+      $('jrRange').addEventListener('click',e=>{ const b=e.target.closest('button[data-r]'); if(b){ JR_RANGE=b.dataset.r; go(); } });
+      $('jrPrev').addEventListener('click',()=>{ JR_DAY=stepDay(JR_RANGE,JR_DAY||sgNow().day,-1); go(); });
+      $('jrNext').addEventListener('click',()=>{ const d=stepDay(JR_RANGE,JR_DAY||sgNow().day,1); JR_DAY=d>sgNow().day?null:d; go(); });
+      $('jrToday').addEventListener('click',()=>{ JR_DAY=null; go(); });
+      $('jrDate').addEventListener('change',e=>{ if(e.target.value){ JR_DAY=e.target.value; go(); } }); }
+    const med=a=>{ a=a.filter(x=>x!=null).sort((x,y)=>x-y); return a.length?(a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2):null; };
     const T=x=>x?new Date(x.split('|')[0]).getTime():null, hrs=(a,b)=>a&&b?(T(b)-T(a))/3600000:null;
     const when=x=>x?esc(fmtDay(x.slice(0,10)))+(x.includes('|day')?' <span class="muted">(no time)</span>':' '+esc(x.slice(11,16))):'<span class="muted">–</span>';
     const dur=h=>h==null?'–':h<1?Math.round(h*60)+' min':h<48?(Math.round(h*10)/10)+' h':(Math.round(h/24*10)/10)+' days';
     const bk=JR.filter(j=>j.bk&&j.bk.d), cf=JR.filter(j=>j.conf), withNum=JR.filter(j=>j.num).length;
     $('jrTiles').innerHTML=!D.jobs?tile('Job requests','–','not read yet: appears after the next full update'):
-      tile('Job requests',JR.length,'sent to providers in the last '+D.jobs.days+' days')
+      tile('Job requests',JR.length,'sent to providers in this period')
       +tile('Providers asked per job',JR.length?(Math.round(JR.reduce((a,j)=>a+j.n,0)/JR.length*10)/10):'–','average; most for one job: '+Math.max(0,...JR.map(j=>j.n)))
       +tile('First provider reply',dur(med(JR.map(j=>hrs(j.first,j.first_reply)))),'median, from the first job request')
       +tile('Request to provider confirmed',dur(med(cf.map(j=>hrs(j.first,j.conf)))),'median, '+cf.length+' jobs with a "Confirmed" message')
@@ -1622,7 +1638,7 @@ function render(day){
       +tile('Jobs with a #number',JR.length?Math.round(withNum/JR.length*100)+'%':'–','needed to match the booking');
     const stp={offered:['on','Offered'],declined:['bad','Declined'],replied:['','Replied'],'no reply':['warn','No reply']};
     const prov=j=>j.p.map(p=>{ const [c,l]=stp[p.st]||['',p.st]; return `<div style="margin:2px 0"><b>${esc(p.n)}</b> <span class="pill ${c}">${l}</span>${p.slot?' '+when(p.slot):''}${p.mins!=null?` <span class="muted" style="font-size:12px">after ${esc(dur(p.mins/60))}</span>`:''}${p.say?`<div class="muted" style="font-size:12px">“${esc(p.say)}”</div>`:''}</div>`; }).join('');
-    $('jrAll').innerHTML=JR.length?'<tr><th>First contact</th><th>Job</th><th class="num">Asked</th><th>Providers and their answers</th><th>First slot offered</th><th>Earliest slot</th><th>Confirmed</th><th>Booking</th></tr>'+JR.map(j=>`<tr><td style="white-space:nowrap">${when(j.first)}</td><td>${j.num?'<b>#'+esc(j.num)+'</b> ':j.key?'<span class="muted">'+esc(j.key)+'</span> ':''}${esc(j.svc)}${j.price&&!(j.svc||'').includes('$')?' <span class="muted">$'+esc(j.price)+'</span>':''}</td><td class="num">${j.n}</td><td style="min-width:280px">${prov(j)}</td><td style="white-space:nowrap">${when(j.first_offer)}</td><td style="white-space:nowrap">${when(j.earliest)}</td><td style="white-space:nowrap">${j.conf?esc(j.cp||'')+'<div class="muted" style="font-size:12px">'+when(j.conf)+(j.cw?' · '+esc(j.cw):'')+'</div>':'<span class="muted">–</span>'}</td><td style="white-space:nowrap">${j.bk?recLink('booking',j.bk.id,j.bk.ref||'Booking')+'<div class="muted" style="font-size:12px">visit '+when(j.bk.d)+(j.bk.p?'<br>'+esc(j.bk.p):'')+(j.bk.s?' · '+esc(j.bk.s):'')+'</div>':'<span class="muted">'+(j.num?'not booked yet':'no #number')+'</span>'}</td></tr>`).join(''):'<tr><td class="muted">No job requests in this period.</td></tr>';
+    $('jrAll').innerHTML=JR.length?'<tr><th>First contact</th><th>Job</th><th class="num">Asked</th><th>Providers and their answers</th><th>First slot offered</th><th>Earliest slot</th><th>Confirmed</th><th>Booking</th></tr>'+JR.map(j=>`<tr><td style="white-space:nowrap">${when(j.first)}</td><td>${j.num?'<b>#'+esc(j.num)+'</b> ':j.key?'<span class="muted">'+esc(j.key)+'</span> ':''}${esc(j.svc)}${j.price&&!(j.svc||'').includes('$')?' <span class="muted">$'+esc(j.price)+'</span>':''}</td><td class="num">${j.n}</td><td style="min-width:280px">${prov(j)}</td><td style="white-space:nowrap">${when(j.first_offer)}</td><td style="white-space:nowrap">${when(j.earliest)}</td><td style="white-space:nowrap">${j.conf?esc(j.cp||'')+'<div class="muted" style="font-size:12px">'+when(j.conf)+(j.cw?' · '+esc(j.cw):'')+'</div>':'<span class="muted">–</span>'}</td><td style="white-space:nowrap">${j.bk?recLink('booking',j.bk.id,j.bk.ref||'Booking')+'<div class="muted" style="font-size:12px">visit '+when(j.bk.d)+(j.bk.p?'<br>'+esc(j.bk.p):'')+(j.bk.s?' · '+esc(j.bk.s):'')+'</div>':'<span class="muted">'+(j.num?'not booked yet':'no #number')+'</span>'}</td></tr>`).join(''):'<tr><td class="muted">No job requests in this period'+(JS.from<jrMin?' (job requests are read back to '+esc(fmtDay(jrMin))+')':'')+'.</td></tr>';
   }
   // ---- service satisfaction: every customer answer to the after-visit survey ----
   { const all=(D.ratings||D.visits.filter(r=>r.cf||r.cr)).map(r=>({...r,cr:r.cr==null||r.cr===''?null:Number(r.cr)})), saDay=SA_DAY||now.day, SR=spanOf(SA_RANGE,saDay), from=SR.from;
