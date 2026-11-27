@@ -138,11 +138,16 @@ def job_requests(z, now):
         names[d] = (r.get("Name") or "").strip()
 
     # bookings made in the window, keyed by the last 4 digits of the customer's mobile
-    bk = {}
-    for r in z.all("select Name, Date_Time, Created_Time, Booking_Status, Partner_Name.Name, Service_Category, Pet_Owner.Mobile_Number from Booking where Created_Time >= '%s'" % since):
+    # and by the service address postcode, for job requests sent without the #number
+    bk, bypc = {}, {}
+    for r in z.all("select Name, Date_Time, Created_Time, Booking_Status, Partner_Name.Name, Service_Category, Postal_Code, Pet_Owner.Mobile_Number from Booking where Created_Time >= '%s'"
+                   % (now - timedelta(days=DAYS + 14)).isoformat(timespec="seconds")):
         d = digits(r.get("Pet_Owner.Mobile_Number"))
         if len(d) >= 4:
             bk.setdefault(d[-4:], []).append(r)
+        pc = digits(r.get("Postal_Code"))
+        if pc:
+            bypc.setdefault(pc.zfill(6), []).append(r)
 
     # group job requests into jobs
     jobs = []
@@ -152,7 +157,8 @@ def job_requests(z, now):
         j = next((j for j in jobs if j["key"] == k and (at - j["_first"]).days < GROUP_DAYS), None)
         if not j:
             j = {"key": k, "_first": at, "first": at.isoformat(timespec="minutes"), "svc": service_of(t),
-                 "price": (re.search(r"\$\s?(\d+)", t) or [None, None])[1], "num": k[1:] if k[0] == "#" else None, "p": {}}
+                 "price": (re.search(r"\$\s?(\d+)", t) or [None, None])[1], "num": k[1:] if k[0] == "#" else None, "p": {},
+                 "pc": next((a or b for a, b in POST_RX.findall(t)), None)}
             jobs.append(j)
         to = r.get(W + "To")
         j["p"].setdefault(to, {"n": names.get(to) or "…" + (to or "")[-4:], "sent": at.isoformat(timespec="minutes"), "_sent": at})
@@ -200,12 +206,16 @@ def job_requests(z, now):
                 if m:
                     j["cw"] = m.group(1).strip()[:60]
                 break
-        if j["num"]:
-            cand = [b for b in bk.get(j["num"], []) if f - timedelta(hours=12) <= datetime.fromisoformat(b["Created_Time"]) <= f + timedelta(days=GROUP_DAYS + 7)]
+        # the booking: first by the #number (customer's phone), else by the postcode in the job request. CS often makes the
+        # booking record before asking providers, so a booking made up to 2 days before the first job request counts.
+        for how, pool in (("#number", bk.get(j["num"]) if j["num"] else None), ("postcode", bypc.get(j["pc"]) if j.get("pc") else None)):
+            cand = [b for b in (pool or []) if f - timedelta(days=2) <= datetime.fromisoformat(b["Created_Time"]) <= f + timedelta(days=GROUP_DAYS + 7)]
             if cand:
-                b = min(cand, key=lambda b: abs((datetime.fromisoformat(b["Created_Time"]) - f).total_seconds()))
+                b = min(cand, key=lambda b: (0 if j.get("cp") and b.get("Partner_Name.Name") == j["cp"] else 1,
+                                             abs((datetime.fromisoformat(b["Created_Time"]) - f).total_seconds())))
                 j["bk"] = {"id": b["id"], "ref": b.get("Name"), "d": b.get("Date_Time"), "s": b.get("Booking_Status"),
-                           "p": b.get("Partner_Name.Name"), "made": b.get("Created_Time")}
+                           "p": b.get("Partner_Name.Name"), "made": b.get("Created_Time"), "by": how}
+                break
 
     res = []
     for j in jobs:
